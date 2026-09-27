@@ -1,0 +1,63 @@
+# Family Planner. `docker compose up -d` starts the planner on port 8080.
+# Extras are Compose profiles: list the ones you want in .env, e.g. COMPOSE_PROFILES=tunnel,homelab
+#   tunnel   Cloudflare Tunnel: reach the planner from your phones without opening router ports
+#   https    Caddy with a Let's Encrypt certificate for a home address (needed for kids' push reminders)
+#   homelab  netmon: network device scan every 5 min and an hourly speed test, for the Homelab tab
+
+services:
+  planner:
+    build: .
+    image: family-planner:local
+    container_name: family-planner
+    restart: unless-stopped
+    ports:
+      - "${PLANNER_PORT:-8080}:8080"
+    environment:
+      - TZ=${TZ:-UTC}
+    volumes:
+      - ./data:/data
+
+  cloudflared:
+    profiles: ["tunnel"]
+    image: cloudflare/cloudflared:latest
+    container_name: family-planner-tunnel
+    restart: unless-stopped
+    command: tunnel --no-autoupdate run
+    environment:
+      - TUNNEL_TOKEN=${CLOUDFLARE_TUNNEL_TOKEN:-}
+    depends_on:
+      - planner
+
+  netmon:
+    profiles: ["homelab"]
+    build: ./netmon
+    image: family-planner-netmon:local
+    container_name: family-planner-netmon
+    restart: unless-stopped
+    network_mode: host   # to see every device on the home network; it opens no ports
+    cap_add:
+      - NET_RAW
+      - NET_ADMIN
+    environment:
+      - NETMON_IFACE=${NETMON_IFACE:-eth0}
+    volumes:
+      - ./data/netmon:/out
+
+  caddy:
+    profiles: ["https"]
+    build: ./caddy
+    image: family-planner-caddy:local
+    container_name: family-planner-https
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    environment:
+      - HOME_DOMAIN=${HOME_DOMAIN:-}
+      - CF_API_TOKEN=${CLOUDFLARE_DNS_TOKEN:-}
+    volumes:
+      - ./caddy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./caddy/data:/data
+      - ./caddy/config:/config
+    depends_on:
+      - planner

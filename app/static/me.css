@@ -1,0 +1,91 @@
+/* My page (/me): home, calendar, kids, homelab. Builds on style.css. */
+
+:root {
+  --series-1: #2a78d6;  /* download, and single-series lines */
+  --series-2: #eb6834;  /* upload */
+  --good: #0ca30c;
+  --bad: #d03b3b;
+  --grid: #e7e5e0;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --series-1: #3987e5; --series-2: #d95926; --grid: #2e3238; }
+}
+
+.card.pad { padding: 14px 16px; }
+.card-title { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; margin-bottom: 8px; }
+.card-title h3 { margin: 0; font-size: 16px; }
+.card-title .meta { color: var(--muted); font-size: 13px; }
+.muted { color: var(--muted); }
+.small { font-size: 13px; }
+.mono { font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+
+/* home: the family board (/mobile) in a frame */
+.home-frame { display: block; width: 100%; height: 75vh; border: 0; border-radius: 14px; background: #0f1114; }
+
+/* charts */
+.chart { position: relative; width: 100%; }
+.chart svg { display: block; width: 100%; height: auto; overflow: visible; fill: initial; stroke: none; }  /* not the 22px icon size */
+.chart .grid line { stroke: var(--grid); stroke-width: 1; }
+.chart .axis text { fill: var(--muted); font-size: 11px; }
+.chart .line { fill: none; stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart .hair { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
+.chart .dot { stroke: var(--card); stroke-width: 2; }
+.chart .bar { fill: var(--series-1); }
+.chart .bar.blocked { fill: var(--muted); }
+.chart .label { font-size: 11px; font-weight: 650; fill: var(--text); }
+.legend { display: flex; gap: 14px; font-size: 13px; color: var(--muted); margin: 4px 0 6px; }
+.legend i { display: inline-block; width: 12px; height: 3px; border-radius: 2px; vertical-align: middle; margin-right: 5px; }
+.tip {
+  position: fixed; z-index: 30; pointer-events: none; background: var(--text); color: var(--bg);
+  padding: 6px 9px; border-radius: 8px; font-size: 12px; line-height: 1.35; white-space: nowrap; transform: translate(-50%, calc(-100% - 10px));
+}
+
+/* stat tiles and meters */
+.tiles { display: grid; grid-template-columns: repeat(auto-fit, minmax(92px, 1fr)); gap: 8px; margin-bottom: 12px; }
+.tile { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); padding: 10px 12px; }
+.tile .v { font-size: 22px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tile .v small { font-size: 13px; font-weight: 600; color: var(--muted); margin-left: 2px; }
+.tile .k { font-size: 12px; color: var(--muted); }
+.meter { margin: 8px 0; }
+.meter .mrow { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 4px; }
+.meter .mrow span:last-child { color: var(--muted); font-variant-numeric: tabular-nums; }
+.meter .track { height: 8px; border-radius: 4px; background: var(--chip); overflow: hidden; }
+.meter .fill { height: 100%; border-radius: 4px; background: var(--series-1); }
+.meter .fill.warn { background: #fab219; }
+.meter .fill.crit { background: var(--bad); }
+
+/* homelab lists */
+.guest { display: grid; grid-template-columns: auto 1fr auto; gap: 2px 10px; align-items: center; padding: 10px 16px; border-top: 1px solid var(--line); }
+.guest:first-child { border-top: 0; }
+.status-dot { width: 9px; height: 9px; border-radius: 50%; background: var(--muted); }
+.status-dot.on { background: var(--good); }
+.guest .gname { font-weight: 600; }
+.guest .gmeta { grid-column: 2 / -1; font-size: 12px; color: var(--muted); }
+.guest .gnum { font-size: 13px; color: var(--muted); font-variant-numeric: tabular-nums; text-align: right; }
+.rank { display: flex; justify-content: space-between; gap: 10px; padding: 8px 16px; border-top: 1px solid var(--line); font-size: 14px; }
+.rank:first-child { border-top: 0; }
+.rank .rname { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.rank .rnum { color: var(--muted); font-variant-numeric: tabular-nums; flex: none; }
+.badge { font-size: 11px; font-weight: 700; padding: 2px 7px; border-radius: 999px; background: var(--accent); color: #fff; margin-left: 6px; vertical-align: 1px; }
+.badge.grey { background: var(--chip); color: var(--muted); }
+.lab-tabs button { padding: 7px 4px; }
+.setup-note { text-align: center; padding: 24px 16px; color: var(--muted); }
+.setup-note .btn { margin-top: 10px; }
+.big-btn { width: 100%; margin: 4px 0 12px; }
+.big-btn:disabled { opacity: .6; cursor: default; }
+.btn.small { padding: 7px 12px; font-size: 13px; }
+.sec-mini { margin: 14px 0 4px; font-size: 13px; color: var(--muted); font-weight: 650; }
+
+/* calendar */
+.cal-dots { display: flex; gap: 2px; flex-wrap: wrap; justify-content: center; max-width: 100%; }
+.cal-dots i { width: 6px; height: 6px; border-radius: 50%; }
+.month .cell.sel { outline: 2px solid var(--accent); }
+
+/* kids */
+.kid-card .kid-head { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-bottom: 1px solid var(--line); }
+.kid-card .kid-head h3 { margin: 0; font-size: 17px; flex: 1; }
+.kid-card .kid-sec { padding: 10px 16px; border-bottom: 1px solid var(--line); }
+.kid-card .kid-sec:last-child { border-bottom: 0; }
+.kid-card .sec-h { font-size: 12px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: .04em; margin-bottom: 4px; }
+.kid-line { font-size: 14px; padding: 3px 0; }
+.kid-line.tap { cursor: pointer; }

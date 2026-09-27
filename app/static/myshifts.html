@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>My planner</title>
+  <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16181c" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="My planner">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body class="no-tabs">
+  <header class="top">
+    <div>
+      <h1 id="title">My planner</h1>
+      <div class="sub"><a href="/mobile">← Back to the planner</a></div>
+    </div>
+  </header>
+
+  <main>
+    <div class="seg page-tabs">
+      <button type="button" data-page="shifts" class="on">💼 My shifts</button>
+      <button type="button" data-page="appts">📅 Appointments</button>
+    </div>
+    <section id="page-shifts">
+      <div class="row-actions">
+        <button class="btn" id="add-btn">+ Add a shift</button>
+        <button class="btn secondary" id="type-btn">⌨️ Type shifts</button>
+      </div>
+      <div id="list"></div>
+      <p class="hint center"><button class="linkish" id="earlier">Show earlier weeks</button></p>
+    </section>
+    <section id="page-appts" hidden>
+      <div class="row-actions">
+        <button class="btn" id="add-appt-btn">+ Add an appointment</button>
+      </div>
+      <div id="appt-list"></div>
+      <p class="hint center">For anyone in the family. They show on the wall, in the planner and on everyone's phone calendar.</p>
+    </section>
+    <p class="hint center" id="faceid-wrap" hidden><button class="linkish" id="faceid">Use Face ID on this phone</button></p>
+  </main>
+
+  <div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
+  <div class="sheet" id="sheet" hidden role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <div id="sheet-body"></div>
+  </div>
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="/common.js"></script>
+  <script src="/passkey.js"></script>
+  <script src="/myshifts.js"></script>
+</body>
+</html>

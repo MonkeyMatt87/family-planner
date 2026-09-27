@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Family Planner</title>
+  <meta name="description" content="A self-hosted family organizer for your homelab: shared calendar, chores, school lunches, shifts, a wall display and kids' pages. One-line Proxmox install.">
+  <link rel="icon" href="screenshots/icon.svg" type="image/svg+xml">
+  <style>
+    :root { --bg: #f6f5f2; --card: #ffffff; --text: #1c1d20; --muted: #5f636a; --line: #e4e2dc; --accent: #2f6fdb; --code: #16181c; --code-text: #e8eaee; }
+    @media (prefers-color-scheme: dark) {
+      :root:not([data-theme="light"]) { --bg: #121417; --card: #1c1f24; --text: #eceef1; --muted: #9aa0a8; --line: #2c3036; --accent: #6b9bf2; --code: #0b0c0e; }
+    }
+    :root[data-theme="dark"] { --bg: #121417; --card: #1c1f24; --text: #eceef1; --muted: #9aa0a8; --line: #2c3036; --accent: #6b9bf2; --code: #0b0c0e; }
+    * { box-sizing: border-box; }
+    body { margin: 0; background: var(--bg); color: var(--text); font: 16px/1.55 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif; }
+    .wrap { max-width: 1080px; margin: 0 auto; padding: 0 16px; }
+    header { padding: 56px 0 28px; text-align: center; }
+    header img.logo { width: 76px; height: 76px; border-radius: 20px; }
+    h1 { font-size: clamp(30px, 5vw, 46px); margin: 14px 0 8px; letter-spacing: -.02em; }
+    .lead { font-size: clamp(17px, 2.2vw, 20px); color: var(--muted); max-width: 680px; margin: 0 auto; }
+    .buttons { display: flex; gap: 10px; justify-content: center; flex-wrap: wrap; margin: 22px 0 0; }
+    .btn { display: inline-block; padding: 11px 18px; border-radius: 12px; font-weight: 650; text-decoration: none; border: 1px solid var(--line); color: var(--text); background: var(--card); }
+    .btn.primary { background: var(--accent); border-color: var(--accent); color: #fff; }
+    .install { background: var(--code); color: var(--code-text); border-radius: 14px; padding: 16px 18px; margin: 28px auto 0; max-width: 860px;
+               display: flex; gap: 12px; align-items: center; }
+    .install code { font: 14px/1.5 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; overflow-x: auto; white-space: nowrap; flex: 1; }
+    .install button { flex: none; border: 0; border-radius: 9px; padding: 8px 12px; font: inherit; font-size: 14px; font-weight: 600; background: #2a2e35; color: #fff; cursor: pointer; }
+    .note { text-align: center; color: var(--muted); font-size: 14px; margin: 8px 0 0; }
+    .shot-wide { margin: 40px 0 16px; }
+    .shot-wide img { width: 100%; border-radius: 14px; display: block; box-shadow: 0 8px 30px rgba(0,0,0,.18); }
+    .shots { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; }
+    .shots figure { margin: 0; }
+    .shots img { width: 100%; border-radius: 14px; display: block; border: 1px solid var(--line); }
+    figcaption { font-size: 13px; color: var(--muted); text-align: center; margin-top: 6px; }
+    h2 { font-size: 26px; margin: 56px 0 16px; letter-spacing: -.01em; }
+    .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
+    .card { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 16px 18px; }
+    .card h3 { margin: 0 0 4px; font-size: 16px; }
+    .card p { margin: 0; color: var(--muted); font-size: 15px; }
+    ol.steps { padding-left: 22px; } ol.steps li { margin: 6px 0; }
+    pre { background: var(--code); color: var(--code-text); border-radius: 12px; padding: 14px 16px; overflow-x: auto; font: 13.5px/1.55 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace; }
+    footer { color: var(--muted); font-size: 14px; text-align: center; padding: 48px 0 40px; }
+    a { color: var(--accent); }
+    @media (max-width: 760px) { .shots { grid-template-columns: repeat(2, minmax(0, 1fr)); } .grid { grid-template-columns: 1fr; } .install { flex-direction: column; align-items: stretch; } }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <header>
+      <img class="logo" src="screenshots/icon-180.png" alt="">
+      <h1>Family Planner</h1>
+      <p class="lead">A self-hosted organizer for the whole family: a shared calendar, chores, school lunches,
+        work shifts and a kitchen wall display. It runs on your own homelab.</p>
+      <div class="buttons">
+        <a class="btn primary" href="https://github.com/Mcross87/family-planner#install">Install</a>
+        <a class="btn" href="https://github.com/Mcross87/family-planner">GitHub</a>
+        <a class="btn" href="https://github.com/Mcross87/family-planner/releases">Releases</a>
+      </div>
+      <div class="install">
+        <code id="one-liner">bash -c "$(curl -fsSL https://raw.githubusercontent.com/Mcross87/family-planner/main/proxmox/install.sh)"</code>
+        <button type="button" id="copy">Copy</button>
+      </div>
+      <p class="note">Paste it into your Proxmox node's Shell. It creates the LXC, installs Docker and starts the planner.</p>
+    </header>
+
+    <div class="shot-wide"><img src="screenshots/wall-display.png" alt="The wall display: clock, weather, today, the next six days, lunches and to-dos"></div>
+    <div class="shots">
+      <figure><img src="screenshots/phone-home.png" alt="Phone app home"><figcaption>Phone app</figcaption></figure>
+      <figure><img src="screenshots/phone-board.png" alt="Family board on a phone"><figcaption>Family board</figcaption></figure>
+      <figure><img src="screenshots/kids-page.png" alt="A kid's page"><figcaption>Kids' pages</figcaption></figure>
+      <figure><img src="screenshots/my-page-calendar.png" alt="Month calendar"><figcaption>My page</figcaption></figure>
+    </div>
+
+    <h2>Everything a busy family juggles</h2>
+    <div class="grid">
+      <div class="card"><h3>📺 Wall display</h3><p>An old monitor and a Raspberry Pi show today, the week ahead, lunches and to-dos. It dims at night.</p></div>
+      <div class="card"><h3>📱 On every phone</h3><p>Add it to the home screen. Sign in with a PIN, Face ID or a fingerprint.</p></div>
+      <div class="card"><h3>🧒 Kids' pages</h3><p>Chores with weekly stars, their own to-dos, birthday countdowns and school-morning notifications.</p></div>
+      <div class="card"><h3>🥪 School lunches</h3><p>Plan school lunch or packed, day by day. Kids' favourite dishes are picked automatically.</p></div>
+      <div class="card"><h3>💼 Work shifts</h3><p>Tap days on a month grid, or type a week the way a paper schedule looks.</p></div>
+      <div class="card"><h3>📅 Google Calendar</h3><p>Shows your family's Google calendars and can copy the planner's appointments back.</p></div>
+      <div class="card"><h3>💲 Bills</h3><p>Due dates and reminders for adults only. They never show on the kids' pages.</p></div>
+      <div class="card"><h3>🖥️ Homelab tab</h3><p>Proxmox, AdGuard Home, hourly speed tests and the devices on your network, all in one place.</p></div>
+      <div class="card"><h3>🔒 Private</h3><p>One SQLite file on your server. No accounts, no cloud, no tracking.</p></div>
+    </div>
+
+    <h2>Install in a few minutes</h2>
+    <ol class="steps">
+      <li><b>Proxmox:</b> run the line above in the node's Shell. <b>Any Debian or Ubuntu machine:</b>
+        <code>curl -fsSL https://raw.githubusercontent.com/Mcross87/family-planner/main/scripts/install.sh | sudo bash</code></li>
+      <li>Open <code>http://&lt;server&gt;:8080/setup</code> on your home network. Add your family, pick your town and set a family PIN.</li>
+      <li>Optional: add a Cloudflare Tunnel or Tailscale for phones away from home, and a Raspberry Pi for the wall.</li>
+    </ol>
+    <p>No internet on the Proxmox host's shell? Download a release file and run
+      <code>bash install.sh --release family-planner-v1.0.0.tar.gz</code>. The <a href="https://github.com/Mcross87/family-planner#install">README</a> has every option.</p>
+
+    <footer>MIT licensed · Made for families with a homelab · <a href="https://github.com/Mcross87/family-planner">github.com/Mcross87/family-planner</a></footer>
+  </div>
+  <script>
+    document.getElementById("copy").addEventListener("click", async e => {
+      try { await navigator.clipboard.writeText(document.getElementById("one-liner").textContent); e.target.textContent = "Copied"; }
+      catch (_) { e.target.textContent = "Select and copy"; }
+      setTimeout(() => (e.target.textContent = "Copy"), 1800);
+    });
+  </script>
+</body>
+</html>

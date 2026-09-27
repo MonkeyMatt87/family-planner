@@ -1,0 +1,53 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Family Planner</title>
+  <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16181c" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="Planner">
+  <meta name="robots" content="noindex">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="manifest" href="/manifest.json">
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <main class="login">
+    <img src="/icon-180.png" alt="">
+    <h1>Family Planner</h1>
+    {message}
+    <p class="login-msg" id="faceid-msg" hidden></p>
+    <button class="btn faceid" id="faceid" type="button" {faceid_hidden}>Sign in with Face ID</button>
+    <form class="card pad" method="post" action="/login" {form_hidden}>
+      <input type="hidden" name="next" value="{next}">
+      <label>Your PIN
+        <input type="password" name="password" inputmode="numeric" autocomplete="current-password" required>
+      </label>
+      <button class="btn" type="submit">Sign in</button>
+    </form>
+  </main>
+  <script src="/passkey.js"></script>
+  <script>
+    const btn = document.getElementById("faceid");
+    const next = document.querySelector("[name=next]").value || "/";
+    if (!passkeysSupported()) btn.hidden = true;
+    btn.addEventListener("click", async () => {
+      const msg = document.getElementById("faceid-msg");
+      msg.hidden = true;
+      try {
+        const { role } = await signInWithPasskey();
+        const phoneOnly = role.startsWith("member:") && !["/mobile", "/my-shifts"].includes(next);
+        location.replace(role === "kid" && !next.startsWith("/kids") ? "/kids" : phoneOnly ? "/mobile" : next);
+      } catch (e) {
+        if (e.name === "NotAllowedError") return;  // cancelled
+        msg.textContent = e.message || "Face ID didn't work. Use the PIN.";
+        msg.hidden = false;
+      }
+    });
+  </script>
+</body>
+</html>

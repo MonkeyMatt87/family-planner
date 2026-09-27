@@ -1,0 +1,9 @@
+# Your family's data and secrets never go in git
+data/
+.env
+caddy/data/
+caddy/config/
+
+__pycache__/
+*.pyc
+dist/

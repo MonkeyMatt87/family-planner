@@ -1,0 +1,11 @@
+# The planner on your home network at https://$HOME_DOMAIN with a real certificate (kids' pages need
+# https for notifications). Point HOME_DOMAIN's DNS A record at this server's home IP (DNS only, not
+# proxied). Let's Encrypt checks you own the domain through Cloudflare DNS, so nothing is exposed.
+{$HOME_DOMAIN} {
+	tls {
+		dns cloudflare {env.CF_API_TOKEN}
+		resolvers 1.1.1.1
+	}
+	encode gzip
+	reverse_proxy planner:8080
+}

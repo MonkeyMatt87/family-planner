@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>My Day</title>
+  <meta name="theme-color" content="#ffb547">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="My Day">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/kids.css">
+</head>
+<body>
+  <main class="kids" id="picker" hidden>
+    <header class="hello"><h1>Who's here? 👋</h1><p>Tap your name</p></header>
+    <nav id="picker-list" class="picker"></nav>
+  </main>
+
+  <main class="kids" id="page" hidden>
+    <header class="hello">
+      <h1 id="hello">Hi! 👋</h1>
+      <p id="today"></p>
+    </header>
+
+    <section class="card summary" id="summary"></section>
+    <section class="card chores" id="chores"></section>
+    <section class="countdowns" id="countdowns" hidden></section>
+    <section class="card weather" id="weather" hidden></section>
+
+    <section class="card">
+      <h2>🍴 Lunch</h2>
+      <div id="lunch"></div>
+    </section>
+
+    <section class="card">
+      <h2>📝 My to-dos</h2>
+      <div id="tasks"></div>
+      <form class="add" id="add-form">
+        <input name="title" placeholder="Add a to-do (like: poster board)" maxlength="60" autocomplete="off" required>
+        <input name="due" type="date" aria-label="Due date (optional)">
+        <button type="submit">Add</button>
+      </form>
+    </section>
+
+    <section class="card fun" id="fun"></section>
+
+    <section class="card">
+      <h2>📅 Coming up</h2>
+      <div id="days"></div>
+    </section>
+
+    <section class="card bell" id="bell" hidden></section>
+
+    <p class="foot"><span id="updated"></span></p>
+  </main>
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="/common.js"></script>
+  <script src="/kids.js"></script>
+</body>
+</html>

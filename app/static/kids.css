@@ -1,0 +1,175 @@
+/* Kids' page: bright, big and friendly. Each kid's own color tints the page (--kid). */
+:root {
+  --bg: #fff7ec;
+  --card: #ffffff;
+  --text: #2b2340;
+  --muted: #7a7190;
+  --kid: #ffb547;
+  --buy: #22a45d;
+  --pack: #e08a12;
+  --radius: 22px;
+  --shadow: 0 2px 0 rgba(43, 35, 64, .06), 0 6px 18px rgba(43, 35, 64, .07);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #1b1726;
+    --card: #262036;
+    --text: #f4f0ff;
+    --muted: #b3aac8;
+    --shadow: none;
+  }
+}
+
+* { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+[hidden] { display: none !important; }
+html, body { margin: 0; }
+body {
+  background: var(--bg); color: var(--text);
+  font: 17px/1.4 "Nunito", "Trebuchet MS", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+.kids {
+  max-width: 560px; margin: 0 auto;
+  padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+}
+
+.hello {
+  background: var(--kid); color: #fff; border-radius: var(--radius); padding: 18px 20px; margin-bottom: 14px;
+  box-shadow: var(--shadow);
+}
+.hello h1 { margin: 0; font-size: 30px; line-height: 1.15; }
+.hello p { margin: 4px 0 0; font-size: 17px; font-weight: 700; opacity: .92; }
+
+.card { background: var(--card); border-radius: var(--radius); padding: 16px 18px; margin-bottom: 14px; box-shadow: var(--shadow); }
+.card h2 { margin: 0 0 10px; font-size: 19px; }
+
+.weather { display: grid; grid-template-columns: auto 1fr; gap: 4px 16px; align-items: center; }
+.weather .big { font-size: 54px; line-height: 1; grid-row: span 2; }
+.weather .temp { font-size: 30px; font-weight: 800; }
+.weather .tip { font-weight: 700; color: var(--muted); }
+.weather .tomorrow { grid-column: 1 / -1; margin-top: 8px; padding-top: 10px; border-top: 2px dashed color-mix(in srgb, var(--muted) 30%, transparent); font-weight: 700; }
+
+.countdown { text-align: center; background: color-mix(in srgb, var(--kid) 16%, var(--card)); }
+.countdown .num { font-size: 44px; font-weight: 900; line-height: 1; color: var(--kid); }
+.countdown .what { font-size: 18px; font-weight: 800; margin-top: 4px; }
+
+.lunch-day + .lunch-day { margin-top: 12px; padding-top: 12px; border-top: 2px dashed color-mix(in srgb, var(--muted) 30%, transparent); }
+.lunch-day .when { font-weight: 800; color: var(--muted); font-size: 14px; text-transform: uppercase; letter-spacing: .04em; }
+.lunch-day .menu { font-size: 20px; font-weight: 800; margin: 2px 0 6px; }
+.lunch-day .mine { display: inline-block; padding: 6px 12px; border-radius: 99px; font-weight: 800; font-size: 15px; }
+.mine.buy { background: color-mix(in srgb, var(--buy) 18%, transparent); color: var(--buy); }
+.mine.pack { background: color-mix(in srgb, var(--pack) 18%, transparent); color: var(--pack); }
+.mine.unset { background: color-mix(in srgb, var(--muted) 15%, transparent); color: var(--muted); }
+
+.todo {
+  display: flex; align-items: center; gap: 12px; width: 100%; text-align: left;
+  border: 0; background: none; color: inherit; font: inherit; padding: 10px 0; cursor: pointer;
+}
+.todo + .todo { border-top: 1px solid color-mix(in srgb, var(--muted) 18%, transparent); }
+.todo .box {
+  flex: none; width: 30px; height: 30px; border-radius: 10px; border: 3px solid var(--kid);
+  display: grid; place-items: center; font-size: 18px; color: #fff;
+}
+.todo.done .box { background: var(--kid); }
+.todo.done .t { text-decoration: line-through; color: var(--muted); }
+.todo .t { flex: 1; font-weight: 700; }
+.todo .due { font-size: 13px; font-weight: 800; color: var(--muted); white-space: nowrap; }
+.todo .due.soon { color: #e0453a; }
+
+.day + .day { margin-top: 12px; }
+.day .dname { font-weight: 900; font-size: 16px; }
+.day .item {
+  display: flex; gap: 10px; align-items: baseline; margin-top: 6px; padding: 9px 12px; border-radius: 14px;
+  background: color-mix(in srgb, var(--c) 14%, var(--card)); border-left: 5px solid var(--c);
+}
+.day .item .when { color: var(--muted); font-weight: 800; font-size: 14px; white-space: nowrap; }
+.day .item .what { font-weight: 800; }
+
+.empty { color: var(--muted); font-weight: 700; }
+.foot { text-align: center; color: var(--muted); font-size: 13px; display: grid; gap: 8px; justify-items: center; }
+.link { border: 0; background: none; color: var(--text); font: inherit; font-weight: 800; text-decoration: underline; cursor: pointer; font-size: 15px; }
+
+.toast {
+  position: fixed; left: 50%; bottom: calc(24px + env(safe-area-inset-bottom)); transform: translateX(-50%);
+  background: var(--text); color: var(--bg); padding: 10px 18px; border-radius: 99px; font-weight: 800;
+}
+
+/* ---------- picker (/kids) */
+.picker { display: grid; gap: 14px; }
+.pick {
+  display: block; text-align: center; text-decoration: none; color: #fff; background: var(--c);
+  font-size: 28px; font-weight: 900; padding: 28px; border-radius: var(--radius); box-shadow: var(--shadow);
+}
+
+/* ---------- morning summary */
+.summary { border: 3px solid var(--kid); }
+.summary .line { font-weight: 700; padding: 5px 0; font-size: 17px; }
+.summary .line + .line { border-top: 1px dashed color-mix(in srgb, var(--muted) 25%, transparent); }
+
+/* ---------- chores */
+.chore-head { display: flex; justify-content: space-between; align-items: baseline; gap: 8px; flex-wrap: wrap; }
+.chore-head h2 { margin-bottom: 4px; }
+.stars { font-weight: 900; color: var(--kid); font-size: 15px; }
+.chores .todo .box { font-size: 18px; }
+.chores .todo.done .box { background: color-mix(in srgb, var(--kid) 25%, var(--card)); }
+.all-done { text-align: center; font-size: 20px; font-weight: 900; color: var(--kid); padding-top: 8px; }
+
+/* ---------- countdowns */
+.countdowns { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr)); gap: 12px; margin-bottom: 14px; }
+.cd { background: color-mix(in srgb, var(--kid) 16%, var(--card)); border-radius: var(--radius); padding: 14px; text-align: center; box-shadow: var(--shadow); }
+.cd .num { font-size: 40px; font-weight: 900; line-height: 1; color: var(--kid); }
+.cd .what { font-weight: 800; margin-top: 4px; font-size: 15px; }
+
+.weather .temp small { font-size: 17px; font-weight: 700; }
+
+/* ---------- add a to-do */
+.add { display: flex; gap: 8px; margin-top: 10px; flex-wrap: wrap; }
+.add input { flex: 1 1 160px; min-width: 0; border: 2px solid color-mix(in srgb, var(--muted) 35%, transparent); border-radius: 14px;
+  padding: 10px 12px; font: inherit; background: var(--bg); color: var(--text); }
+.add input[type="date"] { flex: 0 1 150px; }
+.add button { border: 0; border-radius: 14px; padding: 10px 18px; font: inherit; font-weight: 900; background: var(--kid); color: #fff; cursor: pointer; }
+
+/* ---------- joke and fact */
+.fun .joke { font-size: 19px; font-weight: 800; margin: 0 0 8px; }
+.fun .punch { font-size: 19px; font-weight: 900; color: var(--kid); margin: 0; }
+.fun .reveal { border: 0; border-radius: 99px; padding: 8px 16px; font: inherit; font-weight: 800; cursor: pointer;
+  background: color-mix(in srgb, var(--kid) 18%, var(--card)); color: var(--text); }
+.fun .fact-h { margin-top: 16px; }
+.fun .fact { font-weight: 700; margin: 0; }
+
+/* ---------- island theme: ocean blues, sand and hibiscus */
+body[data-theme="island"] {
+  --kid: #2f86d6; --bg: #eaf7ff; --card: #ffffff; --text: #16324f; --muted: #5f7d99;
+  background: linear-gradient(180deg, #bfe8ff 0%, #eaf7ff 45%, #fff4dc 100%) fixed;
+}
+body[data-theme="island"] .hello { background: linear-gradient(135deg, #2f86d6, #37b7e6); }
+body[data-theme="island"] .card, body[data-theme="island"] .cd { border-radius: 26px; }
+body[data-theme="island"] .cd { background: linear-gradient(160deg, #ffffff, #ffe3ef); }
+body[data-theme="island"] .cd .num, body[data-theme="island"] .stars { color: #e0528d; }
+
+/* ---------- power-up theme: bold red, blue and gold, blocky */
+body[data-theme="power"] {
+  --kid: #e52521; --bg: #6cc6ff; --card: #ffffff; --text: #1d1d1d; --muted: #5a5a5a; --radius: 12px;
+  background: linear-gradient(180deg, #5cbcff 0%, #9ad9ff 70%, #43b047 70%, #43b047 100%) fixed;
+  font-family: "Trebuchet MS", "Arial Black", system-ui, sans-serif;
+}
+body[data-theme="power"] .hello { background: #e52521; border: 4px solid #1d1d1d; box-shadow: 0 5px 0 #1d1d1d; }
+body[data-theme="power"] .card { border: 4px solid #1d1d1d; box-shadow: 0 5px 0 #1d1d1d; }
+body[data-theme="power"] .cd { background: #fbd000; border: 4px solid #1d1d1d; box-shadow: 0 5px 0 #1d1d1d; }
+body[data-theme="power"] .cd .num { color: #1d1d1d; }
+body[data-theme="power"] .stars { color: #b8860b; }
+body[data-theme="power"] .summary { border-color: #049cd8; }
+body[data-theme="power"] .todo .box { border-color: #049cd8; border-radius: 6px; }
+body[data-theme="power"] .todo.done .box { background: #fbd000; }
+body[data-theme="power"] .add button { background: #049cd8; }
+
+@media (prefers-color-scheme: dark) {
+  body[data-theme="island"] { --bg: #0e2236; --card: #15314d; --text: #eaf6ff; --muted: #a9c6e0;
+    background: linear-gradient(180deg, #0b3556 0%, #0e2236 60%) fixed; }
+  body[data-theme="island"] .cd { background: linear-gradient(160deg, #15314d, #4a2140); }
+  body[data-theme="power"] { --card: #1f1f1f; --text: #f5f5f5; --muted: #bdbdbd;
+    background: linear-gradient(180deg, #1b2a4a 0%, #1b2a4a 70%, #1f5c2a 70%) fixed; }
+  body[data-theme="power"] .cd .num { color: #1d1d1d; }
+  body[data-theme="power"] .cd .what { color: #1d1d1d; }
+}

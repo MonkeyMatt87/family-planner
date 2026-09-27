@@ -1,0 +1,55 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Family Board</title>
+  <meta name="theme-color" content="#0f1114">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Family Board">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/display.css">
+</head>
+<body>
+  <div class="board">
+    <header class="head">
+      <div class="clock">
+        <div class="time" id="time">--:--</div>
+        <div class="date" id="date"></div>
+      </div>
+      <div class="family" id="family"></div>
+      <div class="weather" id="weather"></div>
+    </header>
+
+    <section class="today panel">
+      <h2>Today</h2>
+      <div id="today-list"></div>
+    </section>
+
+    <section class="lunch panel" id="lunch-panel">
+      <h2>Lunch</h2>
+      <div id="lunch"></div>
+    </section>
+
+    <section class="week panel">
+      <div class="week-grid" id="week"></div>
+    </section>
+
+    <section class="tasks panel">
+      <h2>To do</h2>
+      <div class="task-cols" id="tasks"></div>
+    </section>
+
+    <footer class="legend" id="legend"></footer>
+  </div>
+  <a class="edit-fab" id="edit-link" href="/my-shifts" hidden></a>
+  <div class="offline" id="offline" hidden>Can't reach the planner – showing the last update</div>
+  <div class="night" id="night" hidden></div>
+
+  <script src="/common.js"></script>
+  <script src="/display.js"></script>
+</body>
+</html>

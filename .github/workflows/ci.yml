@@ -1,0 +1,42 @@
+name: CI
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -r requirements.txt
+      - name: Compile
+        run: python -m compileall -q app netmon
+      - name: Shell scripts parse
+        run: for f in proxmox/install.sh scripts/*.sh pi/setup-kiosk.sh; do bash -n "$f"; done
+      - name: Smoke test (fresh install -> setup -> demo family)
+        env:
+          DATA_DIR: /tmp/fp-data
+          PLANNER_SCHEDULER: "0"
+        run: |
+          uvicorn app.main:app --port 8080 & sleep 5
+          curl -fsS localhost:8080/health
+          test "$(curl -s -o /dev/null -w '%{http_code}' localhost:8080/)" = 303      # -> /setup
+          curl -fsS localhost:8080/setup >/dev/null
+          kill %1
+          python -m app.demo
+          uvicorn app.main:app --port 8080 & sleep 5
+          curl -fsS -c /tmp/c -d "password=2468&next=/" localhost:8080/login -o /dev/null
+          for p in / /api/dashboard /api/tasks /me /display /kids; do
+            curl -fsS -b /tmp/c "localhost:8080$p" -o /dev/null || { echo "failed: $p"; exit 1; }
+          done
+
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - run: docker build -t family-planner:ci .
+      - run: docker build -t family-planner-netmon:ci netmon

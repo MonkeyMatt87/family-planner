@@ -1,0 +1,87 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Set up your Family Planner</title>
+  <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16181c" media="(prefers-color-scheme: dark)">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    .setup-hero { text-align: center; padding: 28px 8px 8px; }
+    .setup-hero img { width: 72px; height: 72px; border-radius: 18px; }
+    .setup-hero h1 { margin: 12px 0 4px; font-size: 26px; }
+    .person-row { display: grid; grid-template-columns: 44px 1fr auto 36px; gap: 8px; align-items: center; margin-bottom: 8px; }
+    .person-row input[type="color"] { height: 44px; padding: 3px; margin: 0; }
+    .person-row input[type="text"] { margin: 0; }
+    .person-row .seg button { padding: 9px 12px; }
+    .person-row .seg button.on { background: var(--card); color: var(--text); }
+    .step { font-size: 12px; font-weight: 700; color: var(--accent); text-transform: uppercase; letter-spacing: .05em; margin: 22px 4px 6px; }
+    .city-results { display: grid; gap: 4px; margin: -4px 0 10px; }
+    .city-results button { text-align: left; border: 1px solid var(--line); background: var(--bg); color: var(--text); border-radius: 10px; padding: 9px 12px; font: inherit; cursor: pointer; }
+    .picked { font-size: 14px; color: var(--muted); margin: -4px 4px 10px; }
+    .done-btn { width: 100%; font-size: 17px; padding: 14px; margin-top: 8px; }
+  </style>
+</head>
+<body class="no-tabs">
+  <main>
+    <div class="setup-hero">
+      <img src="/icon-180.png" alt="">
+      <h1>Welcome to your Family Planner</h1>
+      <p class="hint">A few questions and you're ready. Everything can be changed later in Settings.</p>
+    </div>
+
+    <div class="card pad" id="not-home" hidden>
+      <b>Open this page from your home network.</b>
+      <p class="hint">For safety, a new planner can only be set up from a device on the same network as the server, at <span class="mono">http://&lt;server address&gt;:8080/setup</span>.</p>
+    </div>
+
+    <form id="setup-form" hidden>
+      <div class="step">1 · Your family</div>
+      <div class="card pad">
+        <label>Family name (shown on the wall screen)<input name="family_name" required placeholder="The Smith Family" autocomplete="off"></label>
+        <label>Who's in the family?</label>
+        <div id="people"></div>
+        <button type="button" class="btn secondary" id="add-person">+ Add someone</button>
+        <p class="hint">Kids get their own fun page, chores and the lunch planner. Colours show whose event is whose.</p>
+      </div>
+
+      <div class="step">2 · Where you live</div>
+      <div class="card pad">
+        <label>Your town or city<input name="city" placeholder="Start typing, e.g. Halifax" autocomplete="off"></label>
+        <div class="city-results" id="city-results"></div>
+        <div class="picked" id="picked"></div>
+        <div class="two">
+          <label>Holidays for<select name="holiday_country"><option value="">None</option></select></label>
+          <label>Province / state<select name="holiday_subdiv"><option value="">All of the country</option></select></label>
+        </div>
+        <label>Temperature<select name="temp_unit"><option value="celsius">°C</option><option value="fahrenheit">°F</option></select></label>
+        <p class="hint">The town sets the weather on the wall screen. Time zone: <b id="tz"></b> (set when the planner was installed).</p>
+      </div>
+
+      <div class="step">3 · Family PIN</div>
+      <div class="card pad">
+        <div class="two">
+          <label>PIN (4–10 digits)<input type="password" name="pin" inputmode="numeric" pattern="[0-9]{4,10}" required autocomplete="new-password"></label>
+          <label>Again<input type="password" name="pin2" inputmode="numeric" required autocomplete="new-password"></label>
+        </div>
+        <p class="hint">Phones use it to sign in from outside your home (then Face ID or fingerprint). Pick one that isn't easy to guess, like 1234.</p>
+      </div>
+
+      <div class="step">4 · From outside your home (optional)</div>
+      <div class="card pad">
+        <label>Public web address<input name="public_url" placeholder="https://family.example.com" inputmode="url" autocomplete="off"></label>
+        <p class="hint">If you've set up a Cloudflare Tunnel, Tailscale or similar. Leave blank for now if not; see the README.</p>
+      </div>
+
+      <button class="btn done-btn" type="submit">Start planning</button>
+      <p class="hint center">Your family's information stays on your own server.</p>
+    </form>
+  </main>
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="/common.js"></script>
+  <script src="/setup.js"></script>
+</body>
+</html>
