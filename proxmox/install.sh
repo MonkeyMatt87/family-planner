@@ -2,7 +2,7 @@
 # Family Planner for Proxmox VE: creates a Debian LXC with Docker and the planner in it.
 # Run on the Proxmox host (the node's Shell in the web UI):
 #
-#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/Mcross87/family-planner/main/proxmox/install.sh)"
+#   bash -c "$(curl -fsSL https://raw.githubusercontent.com/MonkeyMatt87/family-planner/main/proxmox/install.sh)"
 #
 # Offline / from a downloaded release (copy both files to the host first):
 #   bash install.sh --release family-planner-v1.0.0.tar.gz
@@ -19,7 +19,7 @@
 #   -y                don't ask, use the settings above
 set -euo pipefail
 
-REPO="${FP_REPO:-Mcross87/family-planner}"
+REPO="${FP_REPO:-MonkeyMatt87/family-planner}"
 CTID="${CTID:-}"
 HOSTNAME_="${CT_HOSTNAME:-family-planner}"
 STORAGE="${STORAGE:-}"

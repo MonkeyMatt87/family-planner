@@ -53,12 +53,12 @@
       <p class="lead">A self-hosted organizer for the whole family: a shared calendar, chores, school lunches,
         work shifts and a kitchen wall display. It runs on your own homelab.</p>
       <div class="buttons">
-        <a class="btn primary" href="https://github.com/Mcross87/family-planner#install">Install</a>
-        <a class="btn" href="https://github.com/Mcross87/family-planner">GitHub</a>
-        <a class="btn" href="https://github.com/Mcross87/family-planner/releases">Releases</a>
+        <a class="btn primary" href="https://github.com/MonkeyMatt87/family-planner#install">Install</a>
+        <a class="btn" href="https://github.com/MonkeyMatt87/family-planner">GitHub</a>
+        <a class="btn" href="https://github.com/MonkeyMatt87/family-planner/releases">Releases</a>
       </div>
       <div class="install">
-        <code id="one-liner">bash -c "$(curl -fsSL https://raw.githubusercontent.com/Mcross87/family-planner/main/proxmox/install.sh)"</code>
+        <code id="one-liner">bash -c "$(curl -fsSL https://raw.githubusercontent.com/MonkeyMatt87/family-planner/main/proxmox/install.sh)"</code>
         <button type="button" id="copy">Copy</button>
       </div>
       <p class="note">Paste it into your Proxmox node's Shell. It creates the LXC, installs Docker and starts the planner.</p>
@@ -96,14 +96,14 @@
     <h2>Install in a few minutes</h2>
     <ol class="steps">
       <li><b>Proxmox:</b> run the line above in the node's Shell. <b>Any Debian or Ubuntu machine:</b>
-        <code>curl -fsSL https://raw.githubusercontent.com/Mcross87/family-planner/main/scripts/install.sh | sudo bash</code></li>
+        <code>curl -fsSL https://raw.githubusercontent.com/MonkeyMatt87/family-planner/main/scripts/install.sh | sudo bash</code></li>
       <li>Open <code>http://&lt;server&gt;:8080/setup</code> on your home network. Add your family, pick your town and set a family PIN.</li>
       <li>Optional: add a Cloudflare Tunnel or Tailscale for phones away from home, and a Raspberry Pi for the wall.</li>
     </ol>
     <p>No internet on the Proxmox host's shell? Download a release file and run
-      <code>bash install.sh --release family-planner-v1.0.0.tar.gz</code>. The <a href="https://github.com/Mcross87/family-planner#install">README</a> has every option.</p>
+      <code>bash install.sh --release family-planner-v1.0.0.tar.gz</code>. The <a href="https://github.com/MonkeyMatt87/family-planner#install">README</a> has every option.</p>
 
-    <footer>MIT licensed · Made for families with a homelab · <a href="https://github.com/Mcross87/family-planner">github.com/Mcross87/family-planner</a></footer>
+    <footer>MIT licensed · Made for families with a homelab · <a href="https://github.com/MonkeyMatt87/family-planner">github.com/MonkeyMatt87/family-planner</a></footer>
   </div>
   <script>
     document.getElementById("copy").addEventListener("click", async e => {

@@ -2,14 +2,14 @@
 # Family Planner installer for a Debian or Ubuntu machine (a Proxmox LXC, a VM, a mini PC, a Pi 4/5).
 # Installs Docker if needed, puts the planner in /opt/family-planner and starts it.
 #
-#   From GitHub:      curl -fsSL https://raw.githubusercontent.com/Mcross87/family-planner/main/scripts/install.sh | bash
+#   From GitHub:      curl -fsSL https://raw.githubusercontent.com/MonkeyMatt87/family-planner/main/scripts/install.sh | bash
 #   From a download:  bash install.sh --release family-planner-v1.0.0.tar.gz
 #   Options:          --dir /opt/family-planner   --version v1.0.0   --homelab (network scan + speed tests)
 #
 # Running it again updates the planner and keeps your data (data/) and settings (.env).
 set -euo pipefail
 
-REPO="${FP_REPO:-Mcross87/family-planner}"
+REPO="${FP_REPO:-MonkeyMatt87/family-planner}"
 DIR="/opt/family-planner"
 VERSION="latest"
 RELEASE=""

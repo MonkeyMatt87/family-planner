@@ -63,7 +63,7 @@ and a fun page for each kid. It runs on your own server: a Proxmox LXC, a mini P
 Open your Proxmox node's **Shell** and run:
 
 ```bash
-bash -c "$(curl -fsSL https://raw.githubusercontent.com/Mcross87/family-planner/main/proxmox/install.sh)"
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/MonkeyMatt87/family-planner/main/proxmox/install.sh)"
 ```
 
 It asks a few questions (the defaults are fine), creates a Debian LXC with Docker (2 cores, 1 GB RAM,
@@ -76,7 +76,7 @@ Options: `--ctid 120 --ip 192.168.1.50/24 --gw 192.168.1.1 --storage local-lvm -
 ### Any Debian or Ubuntu machine
 
 ```bash
-curl -fsSL https://raw.githubusercontent.com/Mcross87/family-planner/main/scripts/install.sh | sudo bash
+curl -fsSL https://raw.githubusercontent.com/MonkeyMatt87/family-planner/main/scripts/install.sh | sudo bash
 ```
 
 This installs Docker if needed and puts the planner in `/opt/family-planner`. Add `-s -- --homelab` after
@@ -84,7 +84,7 @@ This installs Docker if needed and puts the planner in `/opt/family-planner`. Ad
 
 ### From a downloaded release (no GitHub access needed)
 
-Download `family-planner-vX.Y.Z.tar.gz` from [Releases](https://github.com/Mcross87/family-planner/releases),
+Download `family-planner-vX.Y.Z.tar.gz` from [Releases](https://github.com/MonkeyMatt87/family-planner/releases),
 copy it to the machine, then:
 
 ```bash
@@ -98,7 +98,7 @@ The machine still needs internet access to install Docker and the Python package
 ### Docker Compose (by hand)
 
 ```bash
-git clone https://github.com/Mcross87/family-planner.git && cd family-planner
+git clone https://github.com/MonkeyMatt87/family-planner.git && cd family-planner
 cp .env.example .env        # set TZ
 docker compose up -d --build
 ```
@@ -144,7 +144,7 @@ Let's Encrypt certificate for a name like `home.example.com`. Point its DNS to t
 On a Raspberry Pi with Raspberry Pi OS (desktop):
 
 ```bash
-curl -fsSLO https://raw.githubusercontent.com/Mcross87/family-planner/main/pi/setup-kiosk.sh
+curl -fsSLO https://raw.githubusercontent.com/MonkeyMatt87/family-planner/main/pi/setup-kiosk.sh
 bash setup-kiosk.sh http://<server>:8080/display 22:30 06:00    # screen off at 22:30, on at 6:00
 ```
 
