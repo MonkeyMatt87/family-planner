@@ -125,7 +125,7 @@ main { padding: 0 16px; max-width: 640px; margin: 0 auto; }
 .chips::-webkit-scrollbar { display: none; }
 .chips.wrap { flex-wrap: wrap; overflow: visible; margin-top: -6px; margin-bottom: 8px; }
 .seg.page-tabs { display: flex; margin: 0 0 10px; }
-.seg.page-tabs button { flex: 1; }
+.seg.page-tabs button { flex: 1; white-space: nowrap; padding-left: 6px; padding-right: 6px; }
 .seg.page-tabs button.on { background: var(--card); color: var(--text); }
 .chip {
   border: 0; background: var(--chip); color: var(--text);
@@ -287,3 +287,80 @@ body.no-tabs { padding-bottom: calc(env(safe-area-inset-bottom) + 24px); }
 .add-plus { font-size: 24px; color: var(--accent); font-weight: 600; padding: 0 6px; }
 .linkish { border: 0; background: none; color: var(--accent); font: inherit; cursor: pointer; padding: 0; }
 .chips.quick { margin-bottom: 4px; }
+
+/* ---------- Settings tabs (and /admin) */
+.set-tabs { display: flex; gap: 6px; overflow-x: auto; scrollbar-width: none; margin: 4px -16px 6px; padding: 4px 16px 8px; position: sticky; top: calc(env(safe-area-inset-top) + 64px); z-index: 4; background: var(--bg); }
+.set-tabs::-webkit-scrollbar { display: none; }
+.set-tabs button { flex: none; border: 0; border-radius: 999px; padding: 8px 13px; font: inherit; font-size: 14px; font-weight: 600; background: var(--chip); color: var(--text); cursor: pointer; white-space: nowrap; }
+.set-tabs button.on { background: var(--accent); color: var(--accent-text); }
+.st.warn { filter: saturate(1.2); }
+
+body.admin .tabs { display: none; }
+body.admin { padding-bottom: 32px; }
+body.admin main { max-width: 1100px; }
+@media (min-width: 900px) {
+  body.admin #view-settings { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 28px; align-items: start; }
+  body.admin #view-settings[hidden] { display: none; }
+  body.admin .set-tabs { flex-direction: column; margin: 8px 0 0; padding: 0; position: sticky; top: 90px; overflow: visible; }
+  body.admin .set-tabs button { text-align: left; border-radius: 10px; padding: 10px 14px; background: transparent; }
+  body.admin .set-tabs button.on { background: var(--accent); }
+  body.admin .set-tabs button:not(.on):hover { background: var(--chip); }
+  body.admin .set-body { min-width: 0; }
+}
+
+/* ---------- medicine (the phone page, My page → Kids, Admin) */
+.med { padding: 10px 16px; border-top: 1px solid var(--line); }
+.med:first-child { border-top: 0; }
+.med-head { font-size: 15px; }
+.med-meta { font-size: 13px; color: var(--muted); margin: 4px 0 6px; }
+.med-slots { display: flex; flex-wrap: wrap; gap: 6px; margin: 6px 0 2px; }
+.med-slot { border: 0; border-radius: 999px; padding: 8px 13px; font: inherit; font-size: 14px; font-weight: 600; cursor: pointer;
+  background: var(--accent); color: var(--accent-text); }
+.med-slot.done { background: color-mix(in srgb, var(--buy) 16%, transparent); color: var(--text); font-weight: 500; cursor: default; }
+.btn.small { padding: 7px 12px; font-size: 13px; }
+.muted { color: var(--muted); }
+.puff-seg { display: flex; margin: 2px 0 10px; }
+.puff-seg button { flex: 1; }
+.puff-seg button.on { background: var(--accent); color: var(--accent-text); }
+.watch-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.chip.small { padding: 6px 11px; font-size: 13px; }
+.med-tools { margin: 6px 0 2px; }
+.med-meta.danger { color: var(--danger); font-weight: 600; }
+.mail-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+a.btn { text-decoration: none; display: inline-block; }
+.takers { display: grid; gap: 6px; }
+.taker { display: grid; grid-template-columns: minmax(110px, 1fr) 1fr; gap: 8px; align-items: center; }
+.taker label.switch { margin: 0; }
+.taker input[type="text"], .taker input:not([type]) , .taker input[type="number"] { margin: 0; padding: 8px 10px; }
+.taker .puffs-only { display: none; }
+.is-puffer .taker { grid-template-columns: minmax(100px, 1fr) 1fr 90px; }
+.is-puffer .taker .puffs-only { display: block; }
+.tab-checks { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 2px 12px; margin-bottom: 8px; }
+.tab-checks label.switch { margin-bottom: 6px; }
+
+/* ---------- coloured bottom tabs (My page, the phone-only page): each icon has its own colour; the open tab a tinted pill */
+.tabs.colored button[data-view="home"]     { --tab: #2f6fdb; }
+.tabs.colored button[data-view="calendar"] { --tab: #e07b1a; }
+.tabs.colored button[data-view="kids"]     { --tab: #d6478f; }
+.tabs.colored button[data-view="meds"]     { --tab: #d23f3f; }
+.tabs.colored button[data-go="/meals"]     { --tab: #2e9e5b; }
+.tabs.colored button[data-view="lab"]      { --tab: #7c4dd6; }
+.tabs.colored button[data-go="/admin"]     { --tab: #55657a; }
+.tabs.colored button[data-view="shifts"]   { --tab: #0e8f8f; }
+.tabs.colored button[data-view="appts"]    { --tab: #4b55c8; }
+@media (prefers-color-scheme: dark) {
+  .tabs.colored button[data-view="home"]     { --tab: #6b9bf2; }
+  .tabs.colored button[data-view="calendar"] { --tab: #f29a4a; }
+  .tabs.colored button[data-view="kids"]     { --tab: #ef7ab5; }
+  .tabs.colored button[data-view="meds"]     { --tab: #f06a6a; }
+  .tabs.colored button[data-go="/meals"]     { --tab: #4cc07c; }
+  .tabs.colored button[data-view="lab"]      { --tab: #a584ee; }
+  .tabs.colored button[data-go="/admin"]     { --tab: #9aa8ba; }
+  .tabs.colored button[data-view="shifts"]   { --tab: #3cc4c4; }
+  .tabs.colored button[data-view="appts"]    { --tab: #8b93f0; }
+}
+.tabs.colored button svg { color: var(--tab, currentColor); box-sizing: content-box; padding: 3px 10px; border-radius: 999px; transition: background .15s; }
+.tabs.colored button.active { color: var(--tab, var(--accent)); }
+.tabs.colored button.active svg { background: color-mix(in srgb, var(--tab, var(--accent)) 18%, transparent); }
+.tabs.colored button.active span { font-weight: 700; }
+.tabs.colored button[hidden] { display: none; }

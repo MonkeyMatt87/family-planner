@@ -11,27 +11,38 @@
   <link rel="apple-touch-icon" href="/icon-180.png">
   <link rel="icon" href="/icon.svg" type="image/svg+xml">
   <link rel="stylesheet" href="/style.css">
+  <style>
+    .home-frame { display: block; width: 100%; height: 75vh; border: 0; border-radius: 14px; background: #0f1114; }
+  </style>
 </head>
-<body class="no-tabs">
+<body>
   <header class="top">
     <div>
       <h1 id="title">My planner</h1>
-      <div class="sub"><a href="/mobile">← Back to the planner</a></div>
+      <div class="sub" id="who"></div>
     </div>
+    <button class="icon-btn" id="bell-btn" aria-label="Notifications">
+      <svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0"/></svg>
+    </button>
   </header>
 
   <main>
-    <div class="seg page-tabs">
-      <button type="button" data-page="shifts" class="on">💼 My shifts</button>
-      <button type="button" data-page="appts">📅 Appointments</button>
-    </div>
-    <section id="page-shifts">
+    <section id="page-home" hidden></section>
+    <section id="page-shifts" hidden>
       <div class="row-actions">
         <button class="btn" id="add-btn">+ Add a shift</button>
         <button class="btn secondary" id="type-btn">⌨️ Type shifts</button>
       </div>
       <div id="list"></div>
       <p class="hint center"><button class="linkish" id="earlier">Show earlier weeks</button></p>
+    </section>
+    <section id="page-meds" hidden>
+      <h3 class="section-h">💊 My pills</h3>
+      <div class="card list" id="meds-mine"></div>
+      <h3 class="section-h">🧒 Kids' medicine &amp; sick</h3>
+      <div id="meds-kids"></div>
+      <h3 class="section-h">Recent</h3>
+      <div class="card list" id="meds-recent"></div>
     </section>
     <section id="page-appts" hidden>
       <div class="row-actions">
@@ -42,6 +53,29 @@
     </section>
     <p class="hint center" id="faceid-wrap" hidden><button class="linkish" id="faceid">Use Face ID on this phone</button></p>
   </main>
+
+  <nav class="tabs colored">
+    <button data-view="home" data-page="home">
+      <svg viewBox="0 0 24 24"><path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/></svg>
+      <span>Home</span>
+    </button>
+    <button data-view="shifts" data-page="shifts">
+      <svg viewBox="0 0 24 24"><rect x="3.5" y="7" width="17" height="13" rx="2"/><path d="M9 7V5a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2M3.5 13h17"/></svg>
+      <span>Shifts</span>
+    </button>
+    <button data-view="appts" data-page="appts">
+      <svg viewBox="0 0 24 24"><rect x="3.5" y="5" width="17" height="15" rx="2"/><path d="M3.5 10h17M8 3v4M16 3v4M12 13v4M10 15h4"/></svg>
+      <span>Appts</span>
+    </button>
+    <button data-view="meds" data-page="meds">
+      <svg viewBox="0 0 24 24"><rect x="3.5" y="8.5" width="17" height="7" rx="3.5" transform="rotate(-35 12 12)"/><path d="M9.6 8.6l4.8 6.8"/></svg>
+      <span>Meds</span>
+    </button>
+    <button data-go="/meals">
+      <svg viewBox="0 0 24 24"><path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10M16 3c-1.7 0-3 2-3 5s1.3 4 3 4v9"/></svg>
+      <span>Meals</span>
+    </button>
+  </nav>
 
   <div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
   <div class="sheet" id="sheet" hidden role="dialog" aria-modal="true">

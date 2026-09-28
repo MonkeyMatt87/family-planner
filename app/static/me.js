@@ -3,7 +3,7 @@
 const $ = sel => document.querySelector(sel);
 const today = toISO(new Date());
 const state = { view: "home", lab: "pve", people: [], byId: {}, month: today.slice(0, 7), day: today, items: [], kids: [] };
-const TITLES = { home: "Home", calendar: "Calendar", kids: "Kids", lab: "Homelab" };
+const TITLES = { home: "Home", calendar: "Calendar", kids: "Kids", meds: "Medicine", lab: "Homelab" };
 
 function toast(msg, isError = false) {
   const el = $("#toast");
@@ -245,20 +245,47 @@ async function editAppt(id, date) {
 async function renderKids() {
   const v = $("#view-kids");
   state.kids = await api("/api/me/kids");
-  v.innerHTML = state.kids.map(k => {
+  const [mail, rw, medsData, sick] = await Promise.all([Promise.all(state.kids.map(k => api(`/api/me/mail?kid=${k.kid.id}`))),
+    api("/api/me/rewards"), api("/api/meds"), api("/api/meds/symptoms?days=3")]);
+  state.rewards = rw;
+  state.meds = medsData;
+  v.innerHTML = state.kids.map((k, ki) => {
     const s = k.summary;
     const school = s.school
-      ? `Day ${s.rotation ?? "?"}${s.special ? ` · ${esc(s.special)}` : ""}${s.event ? ` · ${esc(s.event)}` : ""}`
+      ? `${s.rotation ? `Day ${s.rotation}` : "School"}${s.special ? ` · ${esc(s.special)}` : ""}${s.event ? ` · ${esc(s.event)}` : ""}`
       : esc(s.reason || "No school");
     const lunch = s.lunch ? `${LUNCH_SHORT[s.lunch.choice] || "Lunch not set"}${s.lunch.menu && s.lunch.choice === "buy" ? `: ${esc(s.lunch.menu)}` : ""}` : "";
     const coming = k.days.flatMap(d => d.items.filter(i => i.source === "appt" || i.source === "google").map(i => ({ ...i })));
     const todos = k.tasks.filter(t => !t.done);
     const bday = k.birthdays.find(b => b.mine);
+    const p = state.byId[k.kid.id] || {};  // teacher details come from /api/people (adults only)
+    const bedDone = k.bedtime.filter(c => c.done).length;
     return `<div class="card kid-card">
       <div class="kid-head"><span class="swatch" style="background:${esc(k.kid.color)}"></span><h3>${esc(nameOf(k.kid))}</h3>
         <button class="btn secondary small" data-kid-appt="${k.kid.id}">+ Appointment</button></div>
       <div class="kid-sec"><div class="sec-h">School ${esc(s.when)}</div>
-        <div class="kid-line">${school}</div>${lunch ? `<div class="kid-line">${lunch}</div>` : ""}</div>
+        <div class="kid-line">${school}</div>${lunch ? `<div class="kid-line">${lunch}</div>` : ""}
+        ${p.teacher ? `<div class="kid-line">👩‍🏫 ${esc(p.teacher)}${p.teacher_email ? ` · <a href="mailto:${esc(p.teacher_email)}">${esc(p.teacher_email)}</a>` : ""}</div>` : ""}
+        ${p.class_notes ? `<div class="kid-line muted small">${esc(p.class_notes).replace(/\n/g, "<br>")}</div>` : ""}</div>
+      <div class="kid-sec kid-meds"><div class="sec-h">💊 Medicine &amp; sick</div>
+        ${medsTools(k.kid.id)}
+        ${(() => { const s = sick.find(x => x.person_id === k.kid.id); return s ? `<div class="kid-line">🌡️ ${esc(medDay(s.at))}: ${[s.temp != null ? `<b class="${s.temp >= 38 ? "danger" : ""}">${s.temp} °C</b>` : "", esc(s.kinds), esc(s.severity), esc(s.note)].filter(Boolean).join(" · ")}</div>` : ""; })()}
+        ${medsHTML(medsData, k.kid.id)}
+        <div class="mail-actions"><button class="btn secondary small" data-med-add="${k.kid.id}">+ Set up a medicine</button></div></div>
+      ${k.homework.length ? `<div class="kid-sec"><div class="sec-h">📚 Homework &amp; reading tonight · ${k.homework.filter(c => c.done).length} of ${k.homework.length} done</div>
+        ${k.homework.map(c => `<div class="kid-line">${c.done ? "✅" : "☐"} ${esc(c.title)}</div>`).join("")}</div>` : ""}
+      <div class="kid-sec"><div class="sec-h">🎁 Rewards · ${k.balance} saved</div>
+        ${k.rewards.map(r => `<div class="kid-line reward-line">
+          <span>${esc(r.title)} <span class="muted">· ${r.cost}</span></span>
+          <span class="reward-bar"><i style="width:${Math.min(100, k.balance / r.cost * 100).toFixed(0)}%"></i></span>
+          <button class="btn secondary small" data-give="${r.id}" data-kid="${k.kid.id}" ${k.balance >= r.cost ? "" : "disabled"}>Give</button></div>`).join("")
+          || `<div class="kid-line muted">No rewards yet. You choose them: every ticked job is one saved.</div>`}
+        <div class="mail-actions"><button class="btn secondary small" data-add-reward="${k.kid.id}">+ Add a reward</button>
+          ${k.rewards.length ? `<button class="btn secondary small" data-edit-rewards>Change rewards</button>` : ""}</div>
+        ${(state.rewards.given || []).filter(g => g.person_id === k.kid.id).slice(0, 3).map(g =>
+          `<div class="kid-line muted small">🎉 ${esc(g.title)} · ${esc(relDay(g.at.slice(0, 10), today))}</div>`).join("")}</div>
+      ${k.bedtime.length ? `<div class="kid-sec"><div class="sec-h">🌙 Bedtime tonight · ${bedDone} of ${k.bedtime.length} done</div>
+        ${k.bedtime.map(c => `<div class="kid-line">${c.done ? "✅" : "☐"} ${c.at ? `<b>${fmtTime(c.at)}</b> · ` : ""}${esc(c.title)}</div>`).join("")}</div>` : ""}
       <div class="kid-sec"><div class="sec-h">Next 7 days</div>
         ${coming.map(i => `<div class="kid-line ${i.source === "appt" ? "tap" : ""}" ${i.source === "appt" ? `data-appt="${i.id}" data-date="${i.date}"` : ""}>
           <b>${esc(relDay(i.date, today))}</b> · ${esc(i.title)}${i.all_day ? "" : ` · ${fmtRange(i)}`}${i.person_id ? "" : ` <span class="muted">(family)</span>`}</div>`).join("")
@@ -266,12 +293,214 @@ async function renderKids() {
       <div class="kid-sec"><div class="sec-h">To-dos</div>
         ${todos.map(t => `<div class="kid-line">☐ ${esc(t.title)}${t.due_date ? ` <span class="muted">· ${esc(relDay(t.due_date, today))}</span>` : ""}</div>`).join("")
           || `<div class="kid-line muted">All done.</div>`}</div>
+      <div class="kid-sec"><div class="sec-h">📧 Teacher emails</div>
+        ${mail[ki].slice(0, 5).map(m => `<div class="kid-line tap" data-mail="${m.id}">
+          ${m.applied ? "✅" : "🆕"} <b>${esc(m.subject || "(no subject)")}</b>
+          <span class="muted">· ${esc(m.sender || "pasted")}${m.sent || m.created ? ` · ${esc(relDay((m.sent || m.created).slice(0, 10), today))}` : ""}</span></div>`).join("")
+          || `<div class="kid-line muted">None yet. Upload one and the planner picks out the dates.</div>`}
+        <div class="mail-actions">
+          <button class="btn secondary small" data-mail-upload="${k.kid.id}">⬆️ Upload an email</button>
+          <button class="btn secondary small" data-mail-paste="${k.kid.id}">📋 Paste the text</button>
+        </div></div>
       <div class="kid-sec small muted">
         ${bday ? `🎂 Turns ${bday.age} in ${bday.days} day${bday.days === 1 ? "" : "s"}` : ""}
         ${k.next_day_off ? `${bday ? " · " : ""}Next day off: ${esc(k.next_day_off.name)} (${esc(relDay(k.next_day_off.date, today))})` : ""}
         · ⭐ ${k.stars} chore star${k.stars === 1 ? "" : "s"} this week</div>
     </div>`;
   }).join("") || `<div class="empty">No kids set up.</div>`;
+}
+
+// ------------------------------------------------------------ medicine: everyone's, in one place
+
+async function renderMeds() {
+  const [data, log] = await Promise.all([api("/api/meds"), api("/api/meds/log?days=7")]);
+  state.meds = data;
+  const people = data.people.filter(p => p.is_kid || data.meds.some(m => m.person_id === p.id));
+  $("#view-meds").innerHTML = people.map(p => `
+    <div class="card kid-card">
+      <div class="kid-head"><span class="swatch" style="background:${esc(p.color || "#8a8f98")}"></span><h3>${esc(nameOf(p))}</h3>
+        <button class="btn secondary small" data-med-add="${p.id}">+ Medicine</button></div>
+      <div class="kid-sec kid-meds">${medsHTML(data, p.id) || `<div class="kid-line muted">No medicine set up.</div>`}${medsTools(p.id)}</div>
+    </div>`).join("") + `
+    <h3 class="section-h">Last 7 days</h3>
+    <div class="card list">${log.slice(0, 20).map(l => `<div class="rank">
+      <span>${esc(l.person)} · ${esc(l.med)}${l.dose ? ` · ${esc(l.dose)}` : ""}${l.note ? ` <span class="muted">· ${esc(l.note)}</span>` : ""}</span>
+      <span class="rnum">${esc(medDay(l.at))}${l.by_name ? ` · ${esc(l.by_name)}` : ""}</span></div>`).join("")
+      || `<div class="rank muted">Nothing given in the last week.</div>`}</div>
+    <p class="hint center"><a href="/admin">Admin → Medicine</a> has the full history and every setting.</p>`;
+}
+
+// ------------------------------------------------------------ rewards (the adults choose them)
+
+function rewardForm(kidId) {
+  const kid = state.byId[kidId];
+  openSheet(`
+    <h2>🎁 New reward</h2>
+    <form id="reward-form">
+      <label>Reward<input name="title" required maxlength="80" autocomplete="off" placeholder="🎬 Pick Friday's movie"></label>
+      <div class="two">
+        <label>Costs<input name="cost" type="number" min="1" max="1000" required value="20"></label>
+        <label>For<select name="who"><option value="${kidId}">${esc(kid.name)} only</option><option value="">Any kid</option></select></label>
+      </div>
+      <p class="hint">Every job, bedtime step and bit of homework they tick saves one. Giving a reward takes its cost off.</p>
+      <div class="sheet-actions"><button type="button" class="btn secondary" id="r-cancel">Cancel</button><button class="btn">Add</button></div>
+    </form>`, body => {
+    body.querySelector("#r-cancel").addEventListener("click", closeSheet);
+    body.querySelector("#reward-form").addEventListener("submit", e => {
+      e.preventDefault();
+      const f = e.target;
+      run(async () => {
+        await api("/api/me/rewards", { method: "POST", body: { title: f.title.value, cost: Number(f.cost.value), person_id: f.who.value ? Number(f.who.value) : null } });
+        closeSheet(); toast("Reward added"); renderKids();
+      });
+    });
+  });
+}
+
+function rewardsList() {
+  const list = state.rewards.rewards;
+  openSheet(`
+    <h2>🎁 Rewards</h2>
+    <div class="card list">${list.map(r => `<div class="row"><div class="row-main"><div class="row-title">${esc(r.title)}</div>
+      <div class="row-meta">${r.cost} · ${r.person_id ? esc(state.byId[r.person_id]?.name || "") : "Any kid"}</div></div>
+      <button class="icon-btn small" data-del-reward="${r.id}" aria-label="Remove"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`).join("")}</div>
+    <div class="sheet-actions"><button type="button" class="btn secondary" id="rl-close">Done</button></div>`, body => {
+    body.querySelector("#rl-close").addEventListener("click", () => { closeSheet(); renderKids(); });
+    body.querySelectorAll("[data-del-reward]").forEach(b => b.addEventListener("click", () => run(async () => {
+      await api(`/api/me/rewards/${b.dataset.delReward}`, { method: "DELETE" });
+      b.closest(".row").remove();
+    })));
+  });
+}
+
+// ------------------------------------------------------------ teachers' emails
+// Upload (.msg/.eml/PDF/photo) or paste, then review what the planner found and tick what to add.
+
+function uploadMail(kidId) {
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = ".msg,.eml,.pdf,.txt,image/*";
+  input.addEventListener("change", () => run(async () => {
+    const file = input.files[0];
+    if (!file) return;
+    toast("Reading it…");
+    const res = await fetch(`/api/me/mail?kid=${kidId}&name=${encodeURIComponent(file.name)}`, {
+      method: "POST", body: file, headers: { "Content-Type": "application/octet-stream" } });
+    if (!res.ok) throw new Error((await res.json().catch(() => ({}))).detail || res.statusText);
+    reviewMail(await res.json());
+    renderKids();
+  }));
+  input.click();
+}
+
+function pasteMail(kidId) {
+  const kid = state.byId[kidId];
+  openSheet(`
+    <h2>Paste ${esc(kid?.name || "")}'s teacher email</h2>
+    <form id="paste-form">
+      <label>Subject (optional)<input name="subject" autocomplete="off" placeholder="October reminders"></label>
+      <label>The email<textarea name="text" rows="10" required placeholder="Paste the whole email here. On an iPhone: open it in Mail, press and hold the text → Select All → Copy."></textarea></label>
+      <div class="sheet-actions"><button type="button" class="btn secondary" id="p-cancel">Cancel</button><button class="btn">Read it</button></div>
+    </form>`, body => {
+    body.querySelector("#p-cancel").addEventListener("click", closeSheet);
+    body.querySelector("#paste-form").addEventListener("submit", e => {
+      e.preventDefault();
+      run(async () => {
+        const d = await api("/api/me/mail/text", { method: "POST", body: { kid: kidId, text: e.target.text.value, subject: e.target.subject.value } });
+        reviewMail(d);
+        renderKids();
+      });
+    });
+  });
+}
+
+const MAIL_GROUPS = [
+  ["teacher", "👩‍🏫 Teacher"], ["closed", "🎉 No school"], ["event", "📅 Special days"], ["task", "📝 To-dos"],
+  ["day", "🔢 Day numbers"], ["specials", "👟 Gym, music and library days"],
+];
+
+function reviewMail(d) {
+  const items = d.items.map(it => ({ ...it }));
+  const days = items.filter(i => i.kind === "day");
+  const dayRange = days.length ? `${relDay(days[0].date, today)} – ${relDay(days[days.length - 1].date, today)}` : "";
+  const row = (it, i) => {
+    const tag = it.already ? ` <span class="badge grey">already in</span>`
+      : it.ocr ? ` <span class="badge grey" title="Read from a photo or scan: check the date">📷 check</span>` : "";
+    if (it.kind === "teacher") return `<label class="mail-item"><input type="checkbox" data-i="${i}" ${it.checked ? "checked" : ""}>
+      <input class="mi-title" data-t="${i}" value="${esc(it.title)}"><span class="muted small">${esc(it.email || "")}</span>${tag}</label>`;
+    if (it.kind === "specials") return `<label class="mail-item"><input type="checkbox" data-i="${i}" ${it.checked ? "checked" : ""}>
+      <span>${Object.entries(it.specials).map(([n, s]) => `Day ${n} ${esc(s)}`).join(" · ")}</span>${tag}</label>`;
+    return `<label class="mail-item"><input type="checkbox" data-i="${i}" ${it.checked ? "checked" : ""}>
+      <input type="date" class="mi-date" data-d="${i}" value="${esc(it.date || "")}">
+      <input class="mi-title" data-t="${i}" value="${esc(it.title)}">${tag}</label>`;
+  };
+  const groups = MAIL_GROUPS.map(([kind, label]) => {
+    const list = items.map((it, i) => [it, i]).filter(([it]) => it.kind === kind)
+      .sort(([a], [b]) => (a.date || "").localeCompare(b.date || ""));
+    if (!list.length) return "";
+    if (kind === "day") {
+      const on = list.some(([it]) => it.checked);
+      const fresh = list.filter(([it]) => !it.already).length;
+      return `<h3 class="section-h">${label}</h3>
+        <label class="mail-item"><input type="checkbox" data-days ${on ? "checked" : ""}>
+          <span>${list.length} school days, ${esc(dayRange)}${fresh ? ` · ${fresh} new` : ` <span class="badge grey">already in</span>`}</span></label>
+        <p class="hint">${list.map(([it]) => `${parseISO(it.date).getDate()}: Day ${it.day_number}`).join(" · ")}</p>`;
+    }
+    return `<h3 class="section-h">${label}</h3>${list.map(([it, i]) => row(it, i)).join("")}`;
+  }).join("");
+  openSheet(`
+    <h2>📧 ${esc(d.subject || "Teacher email")}</h2>
+    <p class="hint">${d.sender ? `From ${esc(d.sender)}${d.sender_email ? ` (${esc(d.sender_email)})` : ""} · ` : ""}for ${esc(d.kid)}${d.sent ? ` · ${esc(relDay(d.sent.slice(0, 10), today))}` : ""}${d.applied ? ` · <b>added ${esc(d.applied.slice(0, 10))}</b>` : ""}</p>
+    ${d.files.length ? `<div class="mail-files">${d.files.map(f => f.photo
+      ? `<a href="/api/me/mail/${d.id}/files/${f.n}" target="_blank"><img src="/api/me/mail/${d.id}/files/${f.n}" alt="${esc(f.name)}"></a>`
+      : `<a class="btn secondary small" href="/api/me/mail/${d.id}/files/${f.n}" target="_blank">📄 ${esc(f.name)}</a>`).join("")}</div>` : ""}
+    ${d.files.some(f => f.photo) ? `<p class="hint">${d.ocr_ready
+      ? "Dates from photos and scans are read by OCR (marked 📷): tap the photo to check them. A PDF you've OCR'd in Foxit reads best."
+      : "Photos can't be read here. Tap one to read it, then add its dates below."}</p>` : ""}
+    ${d.body.trim() ? `<details class="mail-body"><summary>Email text</summary><pre>${esc(d.body.trim())}</pre></details>` : ""}
+    <form id="mail-form">
+      ${groups || `<p class="hint">Nothing with a date was found. Add anything by hand below.</p>`}
+      <h3 class="section-h">➕ Add one by hand</h3>
+      <div class="mail-item manual">
+        <select name="kind"><option value="event">Special day</option><option value="closed">No school</option><option value="task">To-do</option></select>
+        <input type="date" name="date"><input name="title" placeholder="Wear orange" autocomplete="off">
+      </div>
+      <div class="sheet-actions">
+        <button type="button" class="btn danger" id="m-del">Delete email</button>
+        <button type="button" class="btn secondary" id="m-close">Close</button>
+        <button class="btn" type="submit">Add ticked</button>
+      </div>
+    </form>`, body => {
+    body.querySelector("#m-close").addEventListener("click", closeSheet);
+    body.querySelector("#m-del").addEventListener("click", () => run(async () => {
+      if (!confirm("Delete this email and its files? Anything already added stays in the planner.")) return;
+      await api(`/api/me/mail/${d.id}`, { method: "DELETE" });
+      closeSheet(); toast("Deleted"); renderKids();
+    }));
+    body.querySelector("#mail-form").addEventListener("submit", e => {
+      e.preventDefault();
+      const f = e.target;
+      const daysOn = body.querySelector("[data-days]")?.checked;
+      const chosen = items.map((it, i) => {
+        if (it.kind === "day") return daysOn && !it.already ? it : null;
+        if (!body.querySelector(`[data-i="${i}"]`)?.checked) return null;
+        const t = body.querySelector(`[data-t="${i}"]`), dt = body.querySelector(`[data-d="${i}"]`);
+        return { ...it, title: t ? t.value : it.title, date: dt ? dt.value || null : it.date };
+      }).filter(Boolean);
+      if (f.title.value.trim()) chosen.push({ kind: f.kind.value, date: f.date.value || null, title: f.title.value });
+      if (chosen.some(c => ["closed", "event"].includes(c.kind) && !c.date)) return toast("Give each special day a date", true);
+      if (!chosen.length) return toast("Nothing is ticked", true);
+      run(async () => {
+        const r = await api(`/api/me/mail/${d.id}/apply`, { method: "POST", body: { items: chosen } });
+        const n = Object.values(r.added).reduce((a, b) => a + b, 0);
+        closeSheet();
+        toast(`Added ${n} thing${n === 1 ? "" : "s"} to the planner`);
+        state.people = await api("/api/people");
+        state.byId = personMap(state.people);
+        renderKids();
+      });
+    });
+  });
 }
 
 // ------------------------------------------------------------ Homelab
@@ -508,7 +737,7 @@ async function render() {
   document.querySelectorAll(".view").forEach(v => (v.hidden = v.id !== `view-${state.view}`));
   const target = state.view === "lab" ? $("#lab-body") : $(`#view-${state.view}`);
   if (!target.innerHTML.trim()) target.innerHTML = `<div class="empty">Loading…</div>`;
-  await run(({ home: renderHome, calendar: renderCalendar, kids: renderKids, lab: renderLab })[state.view]);
+  await run(({ home: renderHome, calendar: renderCalendar, kids: renderKids, meds: renderMeds, lab: renderLab })[state.view]);
 }
 
 function show(view) {
@@ -521,6 +750,7 @@ function show(view) {
 document.addEventListener("click", e => {
   const t = e.target;
   const tab = t.closest(".tabs button");
+  if (tab?.dataset.go) return (location.href = tab.dataset.go);  // Meals and Admin are their own pages
   if (tab) return show(tab.dataset.view);
   const lab = t.closest("[data-lab]");
   if (lab) { state.lab = lab.dataset.lab; store("lab", state.lab); return run(renderLab); }
@@ -536,12 +766,38 @@ document.addEventListener("click", e => {
   const cell = t.closest("[data-cal-day]");
   if (cell) { state.day = cell.dataset.calDay; if (state.day.slice(0, 7) !== state.month) state.month = state.day.slice(0, 7); return run(renderCalendar); }
   if (t.closest("#cal-add")) return appointmentSheet({ people: state.people, day: state.day, base: "/api/appointments", onSaved: render });
+  const medTakeBtn = t.closest("[data-med-take]");
+  if (medTakeBtn) return medTake(state.meds, medTakeBtn.dataset.medTake, medTakeBtn.dataset.slot || "", () => render());
+  const giveMed = t.closest("[data-give-med]");
+  if (giveMed) return run(async () => { if (!state.meds) state.meds = await api("/api/meds"); giveSheet(state.meds, giveMed.dataset.giveMed, () => render()); });
+  const sym = t.closest("[data-symptom]");
+  if (sym) return run(() => symptomSheet(sym.dataset.symptom, state.meds.people, () => render()));
+  const medAdd = t.closest("[data-med-add]");
+  if (medAdd) return medForm(state.meds, null, () => render(), Number(medAdd.dataset.medAdd));
+  const give = t.closest("[data-give]");
+  if (give) return run(async () => {
+    const r = state.rewards.rewards.find(x => x.id === Number(give.dataset.give));
+    const kid = state.byId[give.dataset.kid];
+    if (!confirm(`Give ${kid.name} "${r.title}"? ${r.cost} come off what they've saved.`)) return;
+    await api(`/api/me/rewards/${r.id}/give`, { method: "POST", body: { person_id: kid.id } });
+    toast(`🎉 ${kid.name}: ${r.title}`); renderKids();
+  });
+  const addReward = t.closest("[data-add-reward]");
+  if (addReward) return rewardForm(Number(addReward.dataset.addReward));
+  if (t.closest("[data-edit-rewards]")) return rewardsList();
+  const up = t.closest("[data-mail-upload]");
+  if (up) return uploadMail(Number(up.dataset.mailUpload));
+  const paste = t.closest("[data-mail-paste]");
+  if (paste) return pasteMail(Number(paste.dataset.mailPaste));
+  const mailRow = t.closest("[data-mail]");
+  if (mailRow) return run(async () => reviewMail(await api(`/api/me/mail/${mailRow.dataset.mail}`)));
   const kidAppt = t.closest("[data-kid-appt]");
   if (kidAppt) return appointmentSheet({ people: state.people, day: today, base: "/api/appointments", onSaved: render, person: Number(kidAppt.dataset.kidAppt) });
   const appt = t.closest("[data-appt]");
   if (appt) return run(() => editAppt(Number(appt.dataset.appt), appt.dataset.date || state.day));
 });
 $("#sheet-backdrop").addEventListener("click", closeSheet);
+$("#bell-btn").addEventListener("click", () => run(notificationsSheet));
 $("#refresh-btn").addEventListener("click", () => {
   const frame = $("#view-home iframe");
   if (state.view === "home" && frame) frame.contentWindow.location.reload();
@@ -554,6 +810,10 @@ run(async () => {
   state.byId = personMap(state.people);
   state.view = TITLES[recall("view")] ? recall("view") : "home";
   state.lab = ["pve", "dns", "speed", "net"].includes(recall("lab")) ? recall("lab") : "pve";
+  // The tabs chosen in Admin → People for the adult this page belongs to (the first with full access).
+  const owner = state.people.find(p => !p.is_kid && p.access !== "phone");
+  const on = applyPageTabs(owner, MY_PAGE_TABS);
+  if (!on.includes(state.view)) state.view = on.find(k => TITLES[k]) || "home";
   await render();
 });
 // Keep the homelab numbers fresh while the page is open.

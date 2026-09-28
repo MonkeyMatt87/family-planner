@@ -5,4 +5,6 @@ icalendar==7.3.0
 recurring-ical-events==3.8.2
 webauthn==3.0.0
 holidays==0.105
+pypdf==6.19.0
+olefile==0.47
 pywebpush==2.5.0

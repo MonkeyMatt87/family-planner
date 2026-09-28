@@ -8,11 +8,15 @@
 """
 import asyncio
 import hashlib
+import json
 import logging
 import os
 import re
+import shutil
+import sqlite3
 import threading
 import time
+from collections import Counter
 from datetime import date, datetime, timedelta
 from html import escape as html_escape
 from pathlib import Path
@@ -22,11 +26,11 @@ from zoneinfo import ZoneInfo
 import httpx
 import icalendar
 from fastapi import FastAPI, HTTPException, Request, Response
-from fastapi.responses import HTMLResponse, JSONResponse, RedirectResponse
+from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import __version__, auth, calendars, db, gcal, holidays, homelab, kids_content, lunch_sync, passkeys, push, school, shift_text
+from . import __version__, auth, calendars, db, gcal, holidays, homelab, kids_content, lunch_sync, meals, meds, passkeys, push, school, school_mail, shift_text
 
 logging.basicConfig(level=logging.INFO)
 TZ = ZoneInfo(os.environ.get("TZ") or "UTC")
@@ -37,6 +41,12 @@ TASK_CATEGORIES = {"school", "project", "chore", "errand", "other"}
 app = FastAPI(title="Family Planner")
 db.init()
 app.include_router(passkeys.router)
+app.include_router(meals.router)
+app.include_router(meds.router)
+meds.set_tz(TZ)
+with db.db() as _conn:
+    meals.seed(_conn)  # starter suppers, once
+    meds.link_cabinet(_conn)  # older medicines get their cabinet entry
 
 
 # Pages link their .js/.css as "/app.js?v=<ASSET_VERSION>". The version changes whenever any file in
@@ -130,6 +140,10 @@ class PersonIn(BaseModel):
     icon: str | None = None     # an emoji shown by the name; None leaves it unchanged
     theme: str | None = None    # kids' page look: "", "island" or "power"
     birthday: str | None = None # YYYY-MM-DD or ""
+    teacher: str | None = None        # kids: "Ms. Smith"
+    teacher_email: str | None = None
+    class_notes: str | None = None    # e.g. an ordering code, "BEE folder every day"
+    page_tabs: list[str] | None = None  # the tabs their own page shows (My page, or the phone-only page)
 
 
 # Never send pin_hash anywhere: a 6-digit PIN's hash can be cracked offline.
@@ -138,8 +152,9 @@ PEOPLE_COLUMNS = "id, name, color, is_kid, sort, aliases, icon, theme, birthday,
 
 @app.get("/api/people")
 def list_people():
+    """For adults' pages. The teacher details stay out of PEOPLE_COLUMNS, which the open wall screen also uses."""
     with db.db() as conn:
-        return db.rows(conn.execute(f"SELECT {PEOPLE_COLUMNS} FROM people ORDER BY sort, id"))
+        return db.rows(conn.execute(f"SELECT {PEOPLE_COLUMNS}, teacher, teacher_email, class_notes, page_tabs FROM people ORDER BY sort, id"))
 
 
 @app.post("/api/people")
@@ -169,6 +184,11 @@ def update_person(pid: int, p: PersonIn):
             if p.birthday:
                 parse_day(p.birthday, today())
             conn.execute("UPDATE people SET birthday = ? WHERE id = ?", (p.birthday, pid))
+        if p.page_tabs is not None:
+            conn.execute("UPDATE people SET page_tabs = ? WHERE id = ?", (json.dumps([t for t in p.page_tabs if re.fullmatch(r"[a-z]{2,12}", t)]), pid))
+        for col in ("teacher", "teacher_email", "class_notes"):
+            if getattr(p, col) is not None:
+                conn.execute(f"UPDATE people SET {col} = ? WHERE id = ?", (getattr(p, col).strip()[:500], pid))
     return {"ok": True}
 
 
@@ -532,10 +552,22 @@ def _school_closures(conn) -> dict[str, str]:
 def _school_events(conn, start: date, end: date) -> dict[str, list[str]]:
     """Special days from the newsletters ("📸 Picture Day"), and dates the school hasn't confirmed yet."""
     out: dict[str, list[str]] = {}
-    for r in conn.execute("SELECT date, title, kind FROM school_dates WHERE kind IN ('event', 'maybe') AND date >= ? AND date < ?",
-                          (start.isoformat(), end.isoformat())):
-        out.setdefault(r["date"], []).append(f"Maybe no school: {r['title']}" if r["kind"] == "maybe" else r["title"])
+    closed = {r["date"] for r in conn.execute("SELECT date FROM school_dates WHERE kind = 'closed'")}
+    for r in conn.execute("SELECT date, title, kind FROM school_dates WHERE kind IN ('event', 'maybe') AND date >= ? AND date < ? "
+                          "ORDER BY source LIKE 'class:%'", (start.isoformat(), end.isoformat())):
+        if r["date"] in closed and (r["kind"] == "maybe" or "unknown" in r["title"].lower()):
+            continue  # a teacher has since confirmed there's no school
+        title = f"Maybe no school: {r['title']}" if r["kind"] == "maybe" else r["title"]
+        day = out.setdefault(r["date"], [])
+        if not any(_same_event(title, t) for t in day):  # the newsletter and a teacher often list the same day
+            day.append(title)
     return out
+
+
+def _same_event(a: str, b: str) -> bool:
+    words = lambda s: {w for w in re.findall(r"[a-z]{4,}", s.lower())}
+    wa, wb = words(a), words(b)
+    return bool(wa and wb) and len(wa & wb) >= min(len(wa), len(wb), 2)
 
 
 def _rotation_anchors(conn) -> list[tuple[date, int]]:
@@ -881,6 +913,12 @@ def agenda(conn, start: date, end: date) -> list[dict]:
             "all_day": False, "overnight": s["end_time"] <= s["start_time"], "location": "",
         })
 
+    for d, title in meals.supper_titles(conn, start, end).items():
+        items.append({
+            "source": "meal", "person_id": None, "title": title, "color": "#c4843a",
+            "date": d, "start_time": None, "end_time": None, "all_day": True, "location": "",
+        })
+
     for a in db.rows(conn.execute(
             "SELECT * FROM appointments WHERE date >= ? AND date < ? AND google_state != 'delete'",
             (start.isoformat(), end.isoformat()))):
@@ -1018,7 +1056,7 @@ def me(request: Request):
     role = auth.cookie_role(request.cookies.get(auth.COOKIE))
     pid = auth.member_id(role)
     with db.db() as conn:
-        person = conn.execute("SELECT id, name, icon, color FROM people WHERE id = ?", (pid,)).fetchone() if pid else None
+        person = conn.execute("SELECT id, name, icon, color, page_tabs FROM people WHERE id = ?", (pid,)).fetchone() if pid else None
     return {"role": "member" if pid else role or "home", "person": dict(person) if person else None}
 
 
@@ -1239,7 +1277,7 @@ KID_TASK_LIMIT = 8  # open to-dos a kid can add themselves
 
 
 def _kid(conn, pid: int) -> dict:
-    kid = conn.execute("SELECT id, name, color, icon, theme, birthday FROM people WHERE id = ? AND is_kid = 1",
+    kid = conn.execute("SELECT id, name, color, icon, theme, birthday, teacher FROM people WHERE id = ? AND is_kid = 1",
                        (pid,)).fetchone()
     if not kid:
         raise HTTPException(404, "not one of the kids")
@@ -1269,6 +1307,7 @@ def _school_day(conn, d: date, kid_name: str) -> dict:
     if reason is None:
         n = school.rotation_day(d, closures, _rotation_anchors(conn))
         info["rotation"] = n
+        info["special"] = _specials(conn, kid_name).get(n)
     return info
 
 
@@ -1315,11 +1354,19 @@ def kid_page(pid: int):
         # Chores for today, and stars earned this week (Monday to today).
         closures = _school_closures(conn)
         school_today = school.closed_reason(t, closures) is None
-        chores = db.rows(conn.execute(
-            "SELECT c.id, c.title, c.school_days, "
+        all_chores = db.rows(conn.execute(
+            "SELECT c.id, c.title, c.school_days, c.routine, c.at, "
             "EXISTS(SELECT 1 FROM chore_done d WHERE d.chore_id = c.id AND d.date = ?) AS done "
-            "FROM chores c WHERE c.person_id = ? ORDER BY c.sort, c.id", (t.isoformat(), pid)))
-        chores = [c for c in chores if school_today or not c["school_days"]]
+            "FROM chores c WHERE c.person_id = ? ORDER BY c.at, c.sort, c.id", (t.isoformat(), pid)))
+        chores = [c for c in all_chores if c["routine"] == "day" and (school_today or not c["school_days"])]
+        # Bedtime and homework follow tonight: a school night (school tomorrow) or not; bedtime shows from 4 pm,
+        # homework and reading from 3 pm.
+        school_tomorrow = school.closed_reason(t + timedelta(days=1), closures) is None
+        bedtime = [c for c in all_chores if c["routine"] == "bedtime" and _night_fits(c["school_days"], school_tomorrow)]
+        homework = [c for c in all_chores if c["routine"] == "homework" and _night_fits(c["school_days"], school_tomorrow)]
+        balance = _star_balance(conn, pid)
+        rewards = db.rows(conn.execute(
+            "SELECT id, title, cost FROM rewards WHERE person_id IS NULL OR person_id = ? ORDER BY cost, sort, id", (pid,)))
         monday = t - timedelta(days=t.weekday())
         stars = conn.execute(
             "SELECT COUNT(*) FROM chore_done d JOIN chores c ON c.id = d.chore_id WHERE c.person_id = ? AND d.date >= ?",
@@ -1348,6 +1395,9 @@ def kid_page(pid: int):
             "days": [{"date": (t + timedelta(days=i)).isoformat(),
                       "items": [x for x in items if x["date"] == (t + timedelta(days=i)).isoformat()]} for i in range(7)],
             "lunch": lunch, "tasks": tasks, "chores": chores, "stars": stars,
+            "bedtime": bedtime, "bedtime_show": now.hour >= 16 and bool(bedtime),
+            "homework": homework, "homework_show": now.hour >= 15 and bool(homework),
+            "balance": balance, "rewards": rewards,
             "next_day_off": next_off, "birthdays": sorted(birthdays, key=lambda b: b["days"]), "parties": parties,
             "home_url": db.get_setting(conn, "home_url").rstrip("/"),
             **kids_content.for_kid(pid, t),
@@ -1380,6 +1430,47 @@ def _morning_message(pid: int) -> tuple[str, str, str] | None:
         parts.append(f"{weatherish(w['code'])} {w['temp']}°, high {d0['hi']}°" + (f" · {tip}" if tip else ""))
     parts.append(f"🚌 Bus at 8:30 · {jobs} jobs to tick off")
     return f"☀️ Good morning, {kid['name']}!", "\n".join(parts), f"/kids/{kid['name'].lower()}"
+
+
+def _bedtime_messages(now: datetime) -> list[tuple[str, int, str, str, str]]:
+    """Bedtime reminders due now: (key, kid, title, body, url) for each step whose time has come in the last
+    30 minutes, on school nights, unless the kid has already ticked it."""
+    t = now.date()
+    hm = now.strftime("%H:%M")
+    soon = (now - timedelta(minutes=30)).strftime("%H:%M")
+    out = []
+    with db.db() as conn:
+        school_tomorrow = school.closed_reason(t + timedelta(days=1), _school_closures(conn)) is None
+        steps = db.rows(conn.execute(
+            "SELECT c.id, c.person_id, c.title, c.at, c.school_days, p.name FROM chores c JOIN people p ON p.id = c.person_id "
+            "WHERE c.routine = 'bedtime' AND c.at != '' ORDER BY c.at"))
+        done = {r["chore_id"] for r in conn.execute("SELECT chore_id FROM chore_done WHERE date = ?", (t.isoformat(),))}
+    for s in steps:
+        if not (soon < s["at"] <= hm) or s["id"] in done or not _night_fits(s["school_days"], school_tomorrow):
+            continue
+        later = [x for x in steps if x["person_id"] == s["person_id"] and x["at"] > s["at"]
+                 and _night_fits(x["school_days"], school_tomorrow)]
+        body = f"Next at {_clock(later[0]['at'])}: {later[0]['title']}" if later else "Sleep well! 💤"
+        out.append((f"bed-{s['id']}-{t}", s["person_id"], f"🌙 {s['name']}: {s['title']}", body, f"/kids/{s['name'].lower()}"))
+    return out
+
+
+def _night_fits(school_days: int, school_tomorrow: bool) -> bool:
+    """Tonight's bedtime and homework: 0 every night, 1 school nights, 2 weekends and nights before a day off."""
+    return school_days == 0 or (school_days == 1) == school_tomorrow
+
+
+def _star_balance(conn, pid: int) -> int:
+    """Stars (flowers, coins) saved up: every ticked job, minus the rewards already given."""
+    earned = conn.execute("SELECT COUNT(*) FROM chore_done d JOIN chores c ON c.id = d.chore_id WHERE c.person_id = ?",
+                          (pid,)).fetchone()[0]
+    spent = conn.execute("SELECT COALESCE(SUM(cost), 0) FROM reward_log WHERE person_id = ?", (pid,)).fetchone()[0]
+    return earned - spent
+
+
+def _clock(hm: str) -> str:
+    h, m = map(int, hm.split(":"))
+    return f"{h % 12 or 12}:{m:02d}"
 
 
 def weatherish(code: int) -> str:
@@ -1476,13 +1567,15 @@ def kid_tick_chore(pid: int, cid: int):
 class ChoreIn(BaseModel):
     person_id: int
     title: str
-    school_days: bool = False
+    school_days: int = 0   # 0 every day/night, 1 school days/nights, 2 weekends and days off
+    routine: str = "day"   # day, bedtime or homework
+    at: str = ""           # HH:MM, a reminder for a bedtime or homework step
 
 
 @app.get("/api/chores")
 def list_chores():
     with db.db() as conn:
-        return db.rows(conn.execute("SELECT * FROM chores ORDER BY person_id, sort, id"))
+        return db.rows(conn.execute("SELECT * FROM chores ORDER BY person_id, routine = 'bedtime', at, sort, id"))
 
 
 @app.post("/api/chores")
@@ -1493,8 +1586,12 @@ def add_chore(c: ChoreIn):
     with db.db() as conn:
         _kid(conn, c.person_id)
         sort = conn.execute("SELECT COALESCE(MAX(sort), 0) + 1 FROM chores WHERE person_id = ?", (c.person_id,)).fetchone()[0]
-        conn.execute("INSERT INTO chores (person_id, title, school_days, sort) VALUES (?, ?, ?, ?)",
-                     (c.person_id, title, int(c.school_days), sort))
+        if c.routine not in ("day", "bedtime", "homework") or c.school_days not in (0, 1, 2):
+            raise HTTPException(400, "bad routine")
+        if c.at:
+            _check_times(c.at)
+        conn.execute("INSERT INTO chores (person_id, title, school_days, sort, routine, at) VALUES (?, ?, ?, ?, ?, ?)",
+                     (c.person_id, title, int(c.school_days), sort, c.routine, c.at if c.routine != "day" else ""))
     return {"ok": True}
 
 
@@ -1660,6 +1757,196 @@ def me_name_device(mac: str, body: DeviceNameIn):
                          (mac, body.name.strip()[:60]))
         else:
             conn.execute("DELETE FROM device_names WHERE mac = ?", (mac,))
+    return {"ok": True}
+
+
+# ---------------------------------------------------------------- teachers' emails (My page → Kids)
+# Upload an email (.msg/.eml/PDF/photo) or paste its text; see what it found; tick what to add.
+
+MAIL_DIR = db.DATA_DIR / "mail"
+MAIL_MAX = 25 * 1024 * 1024
+
+
+def _specials(conn, kid_name: str) -> dict[int, str]:
+    """What each school Day has for this kid (people.specials: from a teacher's calendar, or Settings → Kids)."""
+    row = conn.execute("SELECT specials FROM people WHERE name = ?", (kid_name,)).fetchone()
+    if row and row["specials"]:
+        return {int(k): v for k, v in json.loads(row["specials"]).items()}
+    return {}
+
+
+def _mail_row(conn, mid: int) -> dict:
+    row = conn.execute("SELECT * FROM teacher_mail WHERE id = ?", (mid,)).fetchone()
+    if not row:
+        raise HTTPException(404, "no such email")
+    return dict(row)
+
+
+def _safe_name(name: str) -> str:
+    return re.sub(r"[^\w.\- ]+", "_", name)[:120] or "file"
+
+
+def _mail_path(mid: int, i: int, name: str):
+    return MAIL_DIR / str(mid) / f"{i}-{_safe_name(name)}"
+
+
+def _save_mail(kid: int, mail: dict) -> int:
+    with db.db() as conn:
+        _kid(conn, kid)
+        mid = conn.execute(
+            "INSERT INTO teacher_mail (person_id, sender, sender_email, subject, sent, body, files) VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (kid, mail["sender"], mail["sender_email"], mail["subject"][:200], mail["sent"], mail["body"][:100_000],
+             json.dumps([n for n, _ in mail["attachments"]]))).lastrowid
+    (MAIL_DIR / str(mid)).mkdir(parents=True, exist_ok=True)
+    for i, (name, data) in enumerate(mail["attachments"]):
+        _mail_path(mid, i, name).write_bytes(data)
+    return mid
+
+
+def _mail_detail(mid: int) -> dict:
+    """The email, its files, and suggestions with anything already in the planner unticked."""
+    with db.db() as conn:
+        row = _mail_row(conn, mid)
+        names = json.loads(row["files"])
+        files = [(n, _mail_path(mid, i, n).read_bytes()) for i, n in enumerate(names) if _mail_path(mid, i, n).exists()]
+        near = date.fromisoformat(row["sent"][:10]) if row["sent"] else today()
+        items = school_mail.suggestions({**row, "attachments": files}, near)
+        kid = _kid(conn, row["person_id"])
+        existing = db.rows(conn.execute("SELECT date, title, kind, day_number FROM school_dates"))
+        person = conn.execute("SELECT teacher, teacher_email, specials FROM people WHERE id = ?", (kid["id"],)).fetchone()
+        tasks = {r["title"].lower() for r in conn.execute("SELECT title FROM tasks WHERE person_id = ?", (kid["id"],))}
+    current_specials = json.loads(person["specials"]) if person["specials"] else {}
+    for it in items:
+        if it["kind"] == "day":
+            it["already"] = any(e["kind"] == "day" and e["date"] == it["date"] and e["day_number"] == it["day_number"] for e in existing)
+        elif it["kind"] in ("closed", "event"):
+            it["already"] = any(e["date"] == it["date"] and (
+                e["kind"] == "closed" if it["kind"] == "closed"  # any no-school note that day, whatever it's called
+                else _same_event(e["title"], it["title"])) for e in existing)
+        elif it["kind"] == "teacher":
+            it["already"] = person["teacher"] == it["title"] and person["teacher_email"] == it.get("email", "")
+        elif it["kind"] == "specials":
+            it["already"] = current_specials == it["specials"]
+        elif it["kind"] == "task":
+            it["already"] = it["title"].lower() in tasks
+        if it.get("already"):
+            it["checked"] = False
+    return {**{k: row[k] for k in ("id", "person_id", "sender", "sender_email", "subject", "sent", "body", "applied", "created")},
+            "kid": kid["name"], "ocr_ready": school_mail.ocr_available(),
+            "files": [{"n": i, "name": n, "photo": n.lower().endswith(school_mail.PHOTO), "pdf": n.lower().endswith(".pdf")}
+                      for i, n in enumerate(names)],
+            "items": items}
+
+
+@app.post("/api/me/mail")
+async def me_upload_mail(request: Request, kid: int, name: str):
+    """The file is the request body (no form encoding), named by ?name=."""
+    data = await request.body()
+    if not data:
+        raise HTTPException(400, "that file is empty")
+    if len(data) > MAIL_MAX:
+        raise HTTPException(413, "that file is bigger than 25 MB")
+    try:
+        mail = school_mail.read(name, data)
+    except ValueError as exc:
+        raise HTTPException(400, str(exc))
+    except Exception as exc:
+        raise HTTPException(400, f"couldn't read that file ({exc.__class__.__name__})")
+    return _mail_detail(_save_mail(kid, mail))
+
+
+class MailTextIn(BaseModel):
+    kid: int
+    text: str
+    subject: str = ""
+
+
+@app.post("/api/me/mail/text")
+def me_paste_mail(body: MailTextIn):
+    if not body.text.strip():
+        raise HTTPException(400, "paste the email's text first")
+    first = next((l.strip() for l in body.text.splitlines() if l.strip()), "")
+    mail = {"sender": "", "sender_email": "", "subject": body.subject.strip() or first[:80], "sent": "",
+            "body": body.text, "attachments": []}
+    return _mail_detail(_save_mail(body.kid, mail))
+
+
+@app.get("/api/me/mail")
+def me_list_mail(kid: int):
+    with db.db() as conn:
+        return db.rows(conn.execute(
+            "SELECT id, sender, subject, sent, applied, created, files FROM teacher_mail WHERE person_id = ? "
+            "ORDER BY COALESCE(NULLIF(sent, ''), created) DESC", (kid,)))
+
+
+@app.get("/api/me/mail/{mid}")
+def me_mail(mid: int):
+    return _mail_detail(mid)
+
+
+@app.get("/api/me/mail/{mid}/files/{n}")
+def me_mail_file(mid: int, n: int):
+    with db.db() as conn:
+        names = json.loads(_mail_row(conn, mid)["files"])
+    if not 0 <= n < len(names) or not _mail_path(mid, n, names[n]).exists():
+        raise HTTPException(404, "no such file")
+    return FileResponse(_mail_path(mid, n, names[n]), filename=names[n], content_disposition_type="inline")
+
+
+class MailItem(BaseModel):
+    kind: str
+    date: str | None = None
+    title: str = ""
+    day_number: int | None = None
+    specials: dict[str, str] | None = None
+    email: str | None = None
+
+
+class MailApplyIn(BaseModel):
+    items: list[MailItem]
+
+
+@app.post("/api/me/mail/{mid}/apply")
+def me_apply_mail(mid: int, body: MailApplyIn):
+    """Add the ticked suggestions. Teacher dates are kept when a school newsletter arrives (source "class:...")."""
+    source = f"class:mail-{mid}"
+    added = Counter()
+    with db.db() as conn:
+        row = _mail_row(conn, mid)
+        kid = row["person_id"]
+        for it in body.items:
+            if it.date:
+                parse_day(it.date, today())
+            if it.kind == "day" and it.date and it.day_number:
+                conn.execute("DELETE FROM school_dates WHERE date = ? AND kind = 'day'", (it.date,))
+                conn.execute("INSERT INTO school_dates (date, title, kind, day_number, source) VALUES (?, ?, 'day', ?, ?)",
+                             (it.date, f"Day {it.day_number}", it.day_number, source))
+            elif it.kind in ("closed", "event") and it.date and it.title.strip():
+                conn.execute("INSERT INTO school_dates (date, title, kind, source) VALUES (?, ?, ?, ?)",
+                             (it.date, it.title.strip()[:120], it.kind, source))
+            elif it.kind == "task" and it.title.strip():
+                conn.execute("INSERT INTO tasks (title, person_id, category, due_date, notes) VALUES (?, ?, 'school', ?, ?)",
+                             (it.title.strip()[:200], kid, it.date or None,
+                              f"From {row['sender'] or 'a teacher'}'s email: {row['subject']}"))
+            elif it.kind == "specials" and it.specials:
+                conn.execute("UPDATE people SET specials = ? WHERE id = ?", (json.dumps(it.specials, ensure_ascii=False), kid))
+            elif it.kind == "teacher" and it.title.strip():
+                conn.execute("UPDATE people SET teacher = ?, teacher_email = COALESCE(NULLIF(?, ''), teacher_email) WHERE id = ?",
+                             (it.title.strip()[:80], (it.email or "").strip(), kid))
+            else:
+                continue
+            added[it.kind] += 1
+        conn.execute("UPDATE teacher_mail SET applied = ? WHERE id = ?", (datetime.now(TZ).isoformat(timespec="minutes"), mid))
+    return {"added": dict(added)}
+
+
+@app.delete("/api/me/mail/{mid}")
+def me_delete_mail(mid: int):
+    """Removes the saved email and its files (anything already added to the planner stays)."""
+    with db.db() as conn:
+        _mail_row(conn, mid)
+        conn.execute("DELETE FROM teacher_mail WHERE id = ?", (mid,))
+    shutil.rmtree(MAIL_DIR / str(mid), ignore_errors=True)
     return {"ok": True}
 
 
@@ -1989,6 +2276,411 @@ def setup_page():
     return _page("setup.html")
 
 
+# ---------------------------------------------------------------- rewards (My page → Kids; the kids see their progress)
+
+class RewardIn(BaseModel):
+    title: str
+    cost: int
+    person_id: int | None = None  # None = either kid
+
+
+@app.get("/api/me/rewards")
+def me_rewards():
+    with db.db() as conn:
+        rewards = db.rows(conn.execute("SELECT * FROM rewards ORDER BY cost, sort, id"))
+        kids = [r["id"] for r in conn.execute("SELECT id FROM people WHERE is_kid = 1")]
+        return {"rewards": rewards,
+                "balances": {str(k): _star_balance(conn, k) for k in kids},
+                "given": db.rows(conn.execute(
+                    "SELECT l.*, p.name FROM reward_log l JOIN people p ON p.id = l.person_id ORDER BY l.at DESC LIMIT 20"))}
+
+
+@app.post("/api/me/rewards")
+def me_add_reward(r: RewardIn):
+    if not r.title.strip() or not 1 <= r.cost <= 1000:
+        raise HTTPException(400, "give it a name and a cost from 1 to 1000")
+    with db.db() as conn:
+        if r.person_id is not None:
+            _kid(conn, r.person_id)
+        conn.execute("INSERT INTO rewards (person_id, title, cost) VALUES (?, ?, ?)", (r.person_id, r.title.strip()[:80], r.cost))
+    return {"ok": True}
+
+
+@app.delete("/api/me/rewards/{rid}")
+def me_delete_reward(rid: int):
+    with db.db() as conn:
+        conn.execute("DELETE FROM rewards WHERE id = ?", (rid,))
+    return {"ok": True}
+
+
+class GiveIn(BaseModel):
+    person_id: int
+
+
+@app.post("/api/me/rewards/{rid}/give")
+def me_give_reward(rid: int, body: GiveIn):
+    with db.db() as conn:
+        kid = _kid(conn, body.person_id)
+        r = conn.execute("SELECT * FROM rewards WHERE id = ?", (rid,)).fetchone()
+        if not r:
+            raise HTTPException(404, "no such reward")
+        if _star_balance(conn, kid["id"]) < r["cost"]:
+            raise HTTPException(400, f"{kid['name']} doesn't have enough saved up yet")
+        conn.execute("INSERT INTO reward_log (person_id, title, cost, at) VALUES (?, ?, ?, ?)",
+                     (kid["id"], r["title"], r["cost"], datetime.now(TZ).isoformat(timespec="minutes")))
+        return {"balance": _star_balance(conn, kid["id"])}
+
+
+# ---------------------------------------------------------------- notifications on the adults' phones
+# A phone subscribes for one adult (the phone says who it is); each adult picks topics:
+#   evening  the 8 pm "tomorrow" check        homelab  Proxmox, new devices, slow internet (My page)
+
+ALERT_TOPICS = ("evening", "meds", "homelab")
+
+
+def _topics(conn, pid: int) -> list[str]:
+    raw = db.get_setting(conn, f"alert_topics_{pid}")
+    return json.loads(raw) if raw else ["evening", "meds"]
+
+
+def _alert_person(request: Request, pid: int | None) -> int:
+    """Adults pick whose phone this is; a phone-only sign-in is always themselves."""
+    member = auth.member_id(auth.cookie_role(request.cookies.get(auth.COOKIE)))
+    if member:
+        return member
+    with db.db() as conn:
+        if not pid or not conn.execute("SELECT 1 FROM people WHERE id = ? AND is_kid = 0", (pid,)).fetchone():
+            raise HTTPException(400, "pick whose phone this is")
+    return pid
+
+
+@app.get("/api/alerts/info")
+def alerts_info(request: Request):
+    member = auth.member_id(auth.cookie_role(request.cookies.get(auth.COOKIE)))
+    with db.db() as conn:
+        adults = db.rows(conn.execute("SELECT id, name, icon FROM people WHERE is_kid = 0 ORDER BY sort, id"))
+        if member:
+            adults = [a for a in adults if a["id"] == member]
+        for a in adults:
+            a["topics"] = _topics(conn, a["id"])
+            a["phones"] = conn.execute("SELECT COUNT(*) FROM push_subs WHERE person_id = ?", (a["id"],)).fetchone()[0]
+    return {"key": push.public_key(), "adults": adults, "member": member, "homelab": not member}
+
+
+class AlertSubIn(BaseModel):
+    person_id: int | None = None
+    subscription: dict
+
+
+@app.post("/api/alerts/subscribe")
+def alerts_subscribe(request: Request, body: AlertSubIn):
+    pid = _alert_person(request, body.person_id)
+    try:
+        push.save(pid, body.subscription)
+    except (KeyError, TypeError):
+        raise HTTPException(400, "bad subscription")
+    return {"ok": True}
+
+
+class AlertTopicsIn(BaseModel):
+    person_id: int | None = None
+    topics: list[str]
+
+
+@app.put("/api/alerts/topics")
+def alerts_topics(request: Request, body: AlertTopicsIn):
+    pid = _alert_person(request, body.person_id)
+    member = auth.member_id(auth.cookie_role(request.cookies.get(auth.COOKIE)))
+    topics = [t for t in body.topics if t in ALERT_TOPICS and not (member and t == "homelab")]
+    with db.db() as conn:
+        conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                     (f"alert_topics_{pid}", json.dumps(topics)))
+    return {"topics": topics}
+
+
+class AlertTestIn(BaseModel):
+    person_id: int | None = None
+
+
+@app.post("/api/alerts/test")
+def alerts_test(request: Request, body: AlertTestIn):
+    pid = _alert_person(request, body.person_id)
+    msg = _evening_message(today() + timedelta(days=1)) or ("🌙 Tomorrow", "Nothing special tomorrow.", "/mobile")
+    return {"sent": push.send(pid, *msg)}
+
+
+def _evening_message(t: date) -> tuple[str, str, str] | None:
+    """The 8 pm check: what tomorrow needs, for the adults. None if there's nothing to say."""
+    lines = []
+    with db.db() as conn:
+        kids = db.rows(conn.execute("SELECT id, name FROM people WHERE is_kid = 1 ORDER BY sort, id"))
+        lunch = (_lunch_days(conn, t, t + timedelta(days=1)) or [{}])[0]
+        infos = [(k, _school_day(conn, t, k["name"])) for k in kids]
+        closed = [info["reason"] for _, info in infos if not info["school"]]
+        if kids and len(closed) == len(infos):
+            if closed[0] != "Weekend":
+                lines.append(f"🎉 No school: {closed[0]}")
+        else:
+            for k, info in infos:
+                if not info["school"]:
+                    continue
+                bits = [f"Day {info['rotation']}" if info.get("rotation") else "School"]
+                special = info.get("special") or ""
+                if special:
+                    bits.append(special)
+                if "Gym" in special:
+                    bits.append("sneakers")
+                if "Library" in special:
+                    bits.append("library book")
+                choice = next((x["choice"] for x in lunch.get("kids", []) if x["person_id"] == k["id"]), None)
+                if choice == "buy":
+                    bits.append(f"🍽️ {lunch.get('menu') or 'school lunch'}")
+                elif choice == "pack":
+                    bits.append("🥪 packed lunch")
+                lines.append(f"{k['name']}: " + " · ".join(bits))
+        school_events = _school_events(conn, t, t + timedelta(days=1)).get(t.isoformat(), [])
+        lines += [f"📅 {e}" for e in school_events]
+        for it in agenda(conn, t, t + timedelta(days=1)):
+            if it["source"] in ("appt", "google"):
+                who = conn.execute("SELECT name FROM people WHERE id = ?", (it["person_id"],)).fetchone() if it["person_id"] else None
+                when = "" if it["all_day"] else f"{_clock(it['start_time'])} "
+                lines.append(f"📍 {when}{it['title']}" + (f" ({who['name']})" if who else ""))
+        tasks = db.rows(conn.execute(
+            "SELECT t.title, t.due_date, p.name FROM tasks t LEFT JOIN people p ON p.id = t.person_id "
+            "WHERE t.done = 0 AND t.due_date IS NOT NULL AND t.due_date <= ? ORDER BY t.due_date", (t.isoformat(),)))
+        for task in tasks:
+            late = task["due_date"] < t.isoformat()
+            title = task["title"].lstrip("📝📋✏️ ")  # the line gets its own icon
+            icon = "💳" if school_mail.is_payment(title) else "⚠️" if late else "📝"
+            lines.append(f"{icon} {title.removeprefix('💳 ')}" + (" (overdue)" if late else ""))
+        for m in conn.execute("SELECT m.name, m.puffs_left, p.name AS person FROM meds m JOIN people p ON p.id = m.person_id "
+                              "WHERE m.active = 1 AND m.kind = 'puffer' AND m.puffs_left IS NOT NULL AND m.puffs_left < ?",
+                              (meds.LOW_PUFFS,)):
+            lines.append(f"🫁 {m['person']}'s {m['name'].split(':')[0].split('(')[0].strip()}: about {m['puffs_left']} puffs left, time to refill")
+        for opens, closes in lunch_sync.order_windows(conn):
+            if opens == t:
+                lines.append(f"🍽️ School lunch ordering opens tomorrow (until {closes:%b} {closes.day})")
+            if closes == t:
+                lines.append("🍽️ Tomorrow is the last day to order school lunch")
+        tonight = t - timedelta(days=1)
+        school_tomorrow = school.closed_reason(t, _school_closures(conn)) is None
+        for k in kids:
+            left = [c["title"] for c in db.rows(conn.execute(
+                "SELECT c.title, c.school_days FROM chores c WHERE c.person_id = ? AND c.routine = 'homework' "
+                "AND NOT EXISTS(SELECT 1 FROM chore_done d WHERE d.chore_id = c.id AND d.date = ?)", (k["id"], tonight.isoformat())))
+                if _night_fits(c["school_days"], school_tomorrow)] if tonight == today() else []
+            if left:
+                lines.append(f"📚 {k['name']} hasn't ticked: " + ", ".join(left))
+    if not lines:
+        return None
+    return f"🌙 Tomorrow, {t:%A}", "\n".join(lines), "/me"
+
+
+def _subscribed(conn, topic: str) -> list[int]:
+    adults = [r["person_id"] for r in conn.execute(
+        "SELECT DISTINCT s.person_id FROM push_subs s JOIN people p ON p.id = s.person_id WHERE p.is_kid = 0")]
+    return [a for a in adults if topic in _topics(conn, a)]
+
+
+def _evening_messages(now: datetime) -> list[tuple[str, int, str, str, str]]:
+    if not ("20:00" <= now.strftime("%H:%M") < "20:30"):
+        return []
+    with db.db() as conn:
+        people = _subscribed(conn, "evening")
+    msg = _evening_message(now.date() + timedelta(days=1)) if people else None
+    return [(f"eve-{now.date()}-{pid}", pid, *msg) for pid in people] if msg else []
+
+
+def notify_adults(title: str, body: str, url: str, exclude: int | None = None, topic: str = "meds") -> None:
+    """Tell every adult with a phone for this topic (in the background), except the one who did it."""
+    def send():
+        with db.db() as conn:
+            people = [p for p in _subscribed(conn, topic) if p != exclude]
+        for p in people:
+            push.send(p, title, body, url)
+    threading.Thread(target=send, daemon=True).start()
+
+
+def _med_reminders(now: datetime) -> list[tuple[str, int, str, str, str]]:
+    """Medicine reminders due now: to the person (an adult's own pills), or to the adults for a kid's medicine."""
+    out = []
+    with db.db() as conn:
+        adults = _subscribed(conn, "meds")
+    for key, pid, title, body, url in meds.reminders(now.replace(tzinfo=None)):
+        for p in ([pid] if pid else adults):
+            out.append((f"{key}-{p}", p, title, body, url))
+    return out
+
+
+_homelab_check = {"at": 0.0}
+
+
+def _homelab_alerts(now: datetime) -> list[tuple[str, int, str, str, str]]:
+    """Every 5 minutes: a container or VM stopping (or coming back), a device never seen before, a slow speed test.
+    What's been seen is kept in the setting homelab_alert_state, so each thing is told once."""
+    if time.time() - _homelab_check["at"] < 300:
+        return []
+    _homelab_check["at"] = time.time()
+    with db.db() as conn:
+        people = _subscribed(conn, "homelab")
+        if not people:
+            return []
+        state = json.loads(db.get_setting(conn, "homelab_alert_state", "{}"))
+        news = []
+        p = homelab.proxmox(conn)
+        if p.get("guests"):
+            status = {str(g["id"]): (g["status"], f"{g['id']} · {g['name']}") for g in p["guests"]}
+            old = state.get("guests")
+            if old is not None:
+                for gid, (st, name) in status.items():
+                    before = old.get(gid)
+                    if before == "running" and st != "running":
+                        news.append((f"guest-{gid}-{now:%Y%m%d%H%M}", f"🔴 {name} stopped", f"Proxmox says it's {st}."))
+                    elif before and before != "running" and st == "running":
+                        news.append((f"guest-{gid}-{now:%Y%m%d%H%M}", f"🟢 {name} is running again", ""))
+            state["guests"] = {gid: st for gid, (st, _) in status.items()}
+        devices = homelab.devices(conn)
+        macs = {d["mac"]: d for d in devices["devices"]}
+        known = state.get("macs")
+        if known is not None:
+            for mac, d in macs.items():
+                if mac not in known:
+                    label = d["name"] or d["vendor"] or d.get("guess") or "Unknown device"
+                    news.append((f"mac-{mac}", "📶 New device on the network", f"{label} · {d['ip']} · {mac}"))
+        if macs:
+            state["macs"] = sorted(set(known or []) | set(macs))
+        tests = [x for x in homelab.speedtests()["tests"] if not x.get("error")]
+        if len(tests) >= 6 and tests[-1]["at"] != state.get("speed_at"):
+            last, before = tests[-1], sorted(x["down_mbps"] for x in tests[-49:-1])
+            normal = before[len(before) // 2]
+            if last["down_mbps"] < normal * 0.5:
+                news.append((f"speed-{last['at']}", "🐢 Internet is slow",
+                             f"{last['down_mbps']:.0f} Mb/s down (normally about {normal:.0f}) · {last['ping_ms']} ms"))
+            state["speed_at"] = last["at"]
+        conn.execute("INSERT INTO settings (key, value) VALUES ('homelab_alert_state', ?) "
+                     "ON CONFLICT(key) DO UPDATE SET value = excluded.value", (json.dumps(state),))
+    return [(f"{key}-{pid}", pid, title, body, "/me") for key, title, body in news for pid in people]
+
+
+# ---------------------------------------------------------------- backups (Settings → Backups)
+# A copy of the database every night at 2:30 in data/backups (the last 14 are kept). Copying them off this
+# server is still to be planned; until then, "Download" gets the newest one.
+
+BACKUP_DIR = db.DATA_DIR / "backups"
+BACKUP_KEEP = 14
+
+
+def make_backup() -> str:
+    BACKUP_DIR.mkdir(parents=True, exist_ok=True)
+    name = f"planner-{datetime.now(TZ):%Y-%m-%d-%H%M}.db"
+    src = sqlite3.connect(db.DB_PATH)
+    dst = sqlite3.connect(BACKUP_DIR / name)
+    with dst:
+        src.backup(dst)  # a consistent copy even while the planner is writing
+    src.close()
+    dst.close()
+    for old in sorted(BACKUP_DIR.glob("planner-*.db"))[:-BACKUP_KEEP]:
+        old.unlink()
+    with db.db() as conn:
+        conn.execute("INSERT INTO settings (key, value) VALUES ('backup_last', ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                     (datetime.now(TZ).isoformat(timespec="minutes"),))
+    return name
+
+
+def _maintenance_loop() -> None:
+    while True:
+        try:
+            now = datetime.now(TZ)
+            with db.db() as conn:
+                last = db.get_setting(conn, "backup_last")
+            if now.strftime("%H:%M") >= "02:30" and not last.startswith(now.date().isoformat()):
+                logging.getLogger("planner.backup").info("nightly backup: %s", make_backup())
+        except Exception:
+            logging.getLogger("planner.backup").exception("backup failed")
+        time.sleep(300)
+
+
+@app.get("/api/backups")
+def list_backups():
+    files = sorted(BACKUP_DIR.glob("planner-*.db"), reverse=True) if BACKUP_DIR.exists() else []
+    with db.db() as conn:
+        return {"last": db.get_setting(conn, "backup_last"), "keep": BACKUP_KEEP,
+                "files": [{"name": f.name, "size": f.stat().st_size} for f in files]}
+
+
+@app.post("/api/backups")
+def backup_now():
+    return {"name": make_backup()}
+
+
+@app.get("/api/backups/{name}")
+def download_backup(name: str):
+    if not re.fullmatch(r"planner-[\d-]+\.db", name) or not (BACKUP_DIR / name).exists():
+        raise HTTPException(404, "no such backup")
+    return FileResponse(BACKUP_DIR / name, filename=name, media_type="application/octet-stream")
+
+
+# ---------------------------------------------------------------- Admin (/admin): everything at a glance
+
+@app.get("/api/admin/overview")
+def admin_overview():
+    t = today()
+    with db.db() as conn:
+        get = lambda k: db.get_setting(conn, k)
+        people = db.rows(conn.execute("SELECT id, name, icon, is_kid FROM people ORDER BY sort, id"))
+        for p in people:
+            p["phones"] = conn.execute("SELECT COUNT(*) FROM push_subs WHERE person_id = ?", (p["id"],)).fetchone()[0]
+            p["topics"] = [] if p["is_kid"] else _topics(conn, p["id"])
+        cals = [{"name": c["name"], "error": calendars.last_error(c["url"])} for c in db.rows(conn.execute("SELECT * FROM calendars"))]
+        windows = [(o, c) for o, c in lunch_sync.order_windows(conn) if c >= t]
+        mail = db.rows(conn.execute(
+            "SELECT p.name, COUNT(*) AS waiting FROM teacher_mail m JOIN people p ON p.id = m.person_id "
+            "WHERE m.applied = '' GROUP BY p.name"))
+        overdue = conn.execute("SELECT COUNT(*) FROM tasks WHERE done = 0 AND due_date < ?", (t.isoformat(),)).fetchone()[0]
+        payments = [r for r in db.rows(conn.execute(
+            "SELECT t.title, t.notes, t.due_date, p.name FROM tasks t LEFT JOIN people p ON p.id = t.person_id "
+            "WHERE t.done = 0 ORDER BY t.due_date IS NULL, t.due_date")) if school_mail.is_payment(f"{r['title']} {r['notes']}")]
+        pushes = db.rows(conn.execute(
+            "SELECT l.at, l.title, l.phones, p.name FROM push_log l LEFT JOIN people p ON p.id = l.person_id ORDER BY l.id DESC LIMIT 15"))
+        gstatus = gcal.status(conn)
+        homelab_on = {"proxmox": bool(get("pve_token_id")), "adguard": bool(get("adguard_user"))}
+        backup_last = get("backup_last")
+        lunch = {"synced": get("lunch_synced_at"), "error": get("lunch_sync_error")}
+    tests =[x for x in homelab.speedtests()["tests"] if not x.get("error")]
+    backups = list_backups()
+    return {
+        "today": t.isoformat(),
+        "backups": {"last": backup_last, "count": len(backups["files"])},
+        "people": people,
+        "google": gstatus, "calendars": cals,
+        "lunch": {**lunch, "next_window": [windows[0][0].isoformat(), windows[0][1].isoformat()] if windows else None},
+        "mail_waiting": mail,
+        "overdue": overdue, "payments": payments,
+        "pushes": pushes,
+        "homelab": {**homelab_on, "last_scan": homelab._read("devices.json", {}).get("last_scan"),
+                    "online": len(homelab._read("devices.json", {}).get("online_now", [])),
+                    "speed": tests[-1] if tests else None},
+    }
+
+
+@app.get("/report")
+def report_page():
+    """A printable doctor report of one person's medicine, puffers and symptoms (adults and phone-only sign-ins)."""
+    return _page("report.html")
+
+
+@app.get("/meals")
+def meals_page():
+    """Suppers, the grocery list, what's in the house, recipes and flyer deals (adults and phone-only sign-ins)."""
+    return _page("meals.html")
+
+
+@app.get("/admin")
+def admin_page():
+    """The full planner's Settings, one tab per area, with an Overview (index.html in admin mode)."""
+    return _page("index.html")
+
+
 # ---------------------------------------------------------------- pages
 
 @app.get("/health")
@@ -2035,4 +2727,6 @@ app.mount("/", StaticFiles(directory=STATIC), name="static")
 
 # Kids' 7 am morning summary on their phones. PLANNER_SCHEDULER=0 turns it off (e.g. for tests).
 if os.environ.get("PLANNER_SCHEDULER", "1") == "1":
-    push.start(_morning_message)
+    push.start(_morning_message, lambda now: _bedtime_messages(now) + _evening_messages(now) + _homelab_alerts(now)
+               + _med_reminders(now))
+    threading.Thread(target=_maintenance_loop, daemon=True, name="maintenance").start()

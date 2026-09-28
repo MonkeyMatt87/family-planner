@@ -18,8 +18,11 @@
   <header class="top">
     <div>
       <h1 id="page-title">Home</h1>
-      <div class="sub" id="page-sub"><a href="/">⚙️ Full planner</a></div>
+      <div class="sub" id="page-sub"><a href="/">⚙️ Planner</a> · <a href="/meals">🍽️ Meals</a> · <a href="/admin">🛠️ Admin</a></div>
     </div>
+    <button class="icon-btn" id="bell-btn" aria-label="Notifications" style="margin-left:auto;margin-right:8px">
+      <svg viewBox="0 0 24 24"><path d="M6 16V11a6 6 0 0 1 12 0v5l1.5 2h-15zM10 20a2 2 0 0 0 4 0"/></svg>
+    </button>
     <button class="icon-btn" id="refresh-btn" aria-label="Refresh">
       <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg>
     </button>
@@ -29,6 +32,7 @@
     <section id="view-home" class="view"></section>
     <section id="view-calendar" class="view" hidden></section>
     <section id="view-kids" class="view" hidden></section>
+    <section id="view-meds" class="view" hidden></section>
     <section id="view-lab" class="view" hidden>
       <div class="seg page-tabs lab-tabs">
         <button type="button" data-lab="pve" class="on">Proxmox</button>
@@ -40,7 +44,7 @@
     </section>
   </main>
 
-  <nav class="tabs">
+  <nav class="tabs colored">
     <button data-view="home" class="active">
       <svg viewBox="0 0 24 24"><path d="M3.5 11 12 4l8.5 7"/><path d="M5.5 9.5V20h13V9.5"/><path d="M10 20v-5.5h4V20"/></svg>
       <span>Home</span>
@@ -53,9 +57,21 @@
       <svg viewBox="0 0 24 24"><circle cx="8.5" cy="8" r="3"/><circle cx="16.5" cy="9.5" r="2.5"/><path d="M3 20c0-3.3 2.5-5.5 5.5-5.5S14 16.7 14 20M13.5 15.3c1-.6 1.9-.8 3-.8 2.5 0 4.5 1.8 4.5 4.5"/></svg>
       <span>Kids</span>
     </button>
+    <button data-view="meds">
+      <svg viewBox="0 0 24 24"><rect x="3.5" y="8.5" width="17" height="7" rx="3.5" transform="rotate(-35 12 12)"/><path d="M9.6 8.6l4.8 6.8"/></svg>
+      <span>Meds</span>
+    </button>
+    <button data-go="/meals">
+      <svg viewBox="0 0 24 24"><path d="M7 3v8a2 2 0 0 0 4 0V3M9 11v10M16 3c-1.7 0-3 2-3 5s1.3 4 3 4v9"/></svg>
+      <span>Meals</span>
+    </button>
     <button data-view="lab">
       <svg viewBox="0 0 24 24"><rect x="3.5" y="4" width="17" height="6.5" rx="1.5"/><rect x="3.5" y="13.5" width="17" height="6.5" rx="1.5"/><path d="M7 7.25h.01M7 16.75h.01M11 7.25h5M11 16.75h5"/></svg>
       <span>Homelab</span>
+    </button>
+    <button data-go="/admin">
+      <svg viewBox="0 0 24 24"><path d="M14.5 5.5a4 4 0 0 0-5.3 5.3L4 16v4h4l5.2-5.2a4 4 0 0 0 5.3-5.3l-2.6 2.6-2.5-.5-.5-2.5z"/></svg>
+      <span>Admin</span>
     </button>
   </nav>
 

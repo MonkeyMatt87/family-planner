@@ -165,13 +165,71 @@ async function loadAppts() {
     </div>`).join("") || `<div class="empty">No appointments coming up.<br>Tap “+ Add an appointment” to add one.</div>`;
 }
 
+const PAGE_TITLES = { home: "Home", shifts: "My shifts", appts: "Appointments", meds: "Medicine" };
+
 function showPage(page) {
-  document.querySelectorAll("[data-page]").forEach(b => b.classList.toggle("on", b.dataset.page === page));
-  $("#page-shifts").hidden = page !== "shifts";
-  $("#page-appts").hidden = page !== "appts";
+  document.querySelectorAll("[data-page]").forEach(b => b.classList.toggle("active", b.dataset.page === page));
+  for (const p of Object.keys(PAGE_TITLES)) $(`#page-${p}`).hidden = page !== p;
+  $("#title").textContent = PAGE_TITLES[page];
   try { localStorage.setItem("my-page", page); } catch (_) {}
+  if (page === "home") showHome();
   if (page === "shifts") goToToday();
+  if (page === "meds") run(loadMeds);
 }
+
+// Home: the family board (the same one on the wall and on /mobile), sized to fit.
+function showHome() {
+  const v = $("#page-home");
+  if (v.querySelector("iframe")) return;
+  v.innerHTML = `<iframe class="home-frame" src="/mobile?embed=1" title="Family board" scrolling="no"></iframe>`;
+  const frame = v.querySelector("iframe");
+  frame.addEventListener("load", () => {
+    const doc = frame.contentDocument;
+    if (!doc) return;
+    const fit = () => (frame.style.height = `${doc.documentElement.scrollHeight}px`);
+    new ResizeObserver(fit).observe(doc.body);
+    fit();
+  });
+}
+
+// ------------------------------------------------------------ medicine: her pills, and the kids'
+
+let medsData = null;
+
+async function loadMeds() {
+  const [data, log] = await Promise.all([api("/api/meds"), api("/api/meds/log?days=7")]);
+  medsData = data;
+  const me = await api("/api/me");
+  const mine = me.person ? medsHTML(data, me.person.id) : "";
+  $("#meds-mine").innerHTML = mine || `<div class="row"><div class="row-main"><div class="row-meta">No pills set up. An adult can add them in Admin → Medicine.</div></div></div>`;
+  $("#meds-kids").innerHTML = data.people.filter(p => p.is_kid).map(k => `
+    <div class="card list"><div class="row"><div class="row-main"><div class="row-title">${esc(nameOf(k))}</div></div>
+      <button class="btn secondary small" data-med-add="${k.id}">+ Medicine</button></div>
+      ${medsHTML(data, k.id) || `<div class="med"><div class="med-meta">No medicine set up. Tap + Medicine to add one (e.g. Children's Tylenol or a puffer).</div></div>`}
+      <div class="med">${medsTools(k.id)}</div>
+    </div>`).join("");
+  $("#meds-recent").innerHTML = log.slice(0, 12).map(l => `<div class="row"><div class="row-main">
+    <div class="row-title">💊 ${esc(l.person)} · ${esc(l.med)}${l.dose ? ` · ${esc(l.dose)}` : ""}</div>
+    <div class="row-meta">${esc(medDay(l.at))}${l.by_name ? ` · by ${esc(l.by_name)}` : ""}${l.note ? ` · ${esc(l.note)}` : ""}</div></div>
+    <button class="icon-btn small" data-med-undo="${l.id}" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`).join("")
+    || `<div class="row"><div class="row-main"><div class="row-meta">Nothing in the last week.</div></div></div>`;
+}
+
+$("#page-meds").addEventListener("click", e => {
+  const take = e.target.closest("[data-med-take]");
+  if (take) return medTake(medsData, take.dataset.medTake, take.dataset.slot || "", () => run(loadMeds));
+  const giveMed = e.target.closest("[data-give-med]");
+  if (giveMed) return giveSheet(medsData, giveMed.dataset.giveMed, () => run(loadMeds));
+  const sym = e.target.closest("[data-symptom]");
+  if (sym) return run(() => symptomSheet(sym.dataset.symptom, medsData.people, () => run(loadMeds)));
+  const add = e.target.closest("[data-med-add]");
+  if (add) return medForm(medsData, null, () => run(loadMeds), Number(add.dataset.medAdd));
+  const undo = e.target.closest("[data-med-undo]");
+  if (undo) return run(async () => {
+    if (!confirm("Remove this dose from the log?")) return;
+    await api(`/api/meds/log/${undo.dataset.medUndo}`, { method: "DELETE" }); loadMeds();
+  });
+});
 
 // Opening the shifts goes straight to today (the list starts on this week's Sunday).
 function goToToday() {
@@ -184,6 +242,7 @@ function apptSheet(a = null, day = today) {
 }
 
 document.querySelectorAll("[data-page]").forEach(b => b.addEventListener("click", () => showPage(b.dataset.page)));
+document.querySelectorAll("[data-go]").forEach(b => b.addEventListener("click", () => (location.href = b.dataset.go)));
 $("#add-appt-btn").addEventListener("click", () => apptSheet());
 $("#appt-list").addEventListener("click", e => {
   const edit = e.target.closest("[data-edit-appt]");
@@ -201,6 +260,7 @@ $("#list").addEventListener("click", e => {
   if (add) return shiftSheet(null, add.dataset.add);
 });
 $("#add-btn").addEventListener("click", () => shiftSheet());
+$("#bell-btn").addEventListener("click", () => run(notificationsSheet));
 $("#type-btn").addEventListener("click", typeSheet);
 $("#sheet-backdrop").addEventListener("click", closeSheet);
 $("#earlier").addEventListener("click", () => { from = addDays(from, -14); run(load); });
@@ -212,11 +272,18 @@ $("#faceid").addEventListener("click", () => run(async () => {
 
 let startPage = new URLSearchParams(location.search).get("page");
 if (!startPage) try { startPage = localStorage.getItem("my-page"); } catch (_) {}
-showPage(startPage === "appts" ? "appts" : "shifts");
+showPage(PAGE_TITLES[startPage] ? startPage : "shifts");
 
 run(async () => {
   const me = await api("/api/me");
-  if (me.person) $("#title").textContent = `${nameOf(me.person)}'s planner`;
+  if (me.person) {
+    $("#who").textContent = nameOf(me.person);
+    document.title = `${me.person.name}'s planner`;
+    // Only the tabs chosen for them in Admin → People; if the open one is off, go to the first that's on.
+    const on = applyPageTabs(me.person, PHONE_PAGE_TABS);
+    const current = document.querySelector("[data-page].active")?.dataset.page;
+    if (!on.includes(current)) showPage(on.find(k => PAGE_TITLES[k]) || "shifts");
+  }
   $("#faceid-wrap").hidden = !(passkeysSupported() && window.isSecureContext && me.role === "member");
   people = await api("/api/my/people");
   await Promise.all([load(), loadAppts()]);

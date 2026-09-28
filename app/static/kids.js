@@ -46,7 +46,8 @@ function render() {
   const hour = now.getHours();
   const greet = hour < 12 ? "Good morning" : hour < 17 ? th.hello : "Good evening";
   $("#hello").textContent = `${greet}, ${kid.name}! ${kid.icon || th.badge}`;
-  $("#today").textContent = `${DAY_NAMES[now.getDay()]}, ${MONTH_NAMES[now.getMonth()]} ${now.getDate()}`;
+  $("#today").textContent = `${DAY_NAMES[now.getDay()]}, ${MONTH_NAMES[now.getMonth()]} ${now.getDate()}` +
+    (data.kid.teacher ? ` · 👩‍🏫 ${data.kid.teacher}` : "");
 
   // morning summary (today until 3 pm, then tomorrow)
   const s = data.summary;
@@ -86,6 +87,41 @@ function render() {
     ${data.chores.map(c => `<button class="todo ${c.done ? "done" : ""}" data-chore="${c.id}">
       <span class="box">${c.done ? th.star : ""}</span><span class="t">${esc(c.title)}</span></button>`).join("")}
     ${data.chores.length && doneCount === data.chores.length ? `<div class="all-done">All done! ${th.star}${th.star}${th.star}</div>` : ""}`;
+
+  // bedtime routine: school nights, from 4 pm (above the day's jobs, since it's what's next)
+  $("#bedtime").hidden = !data.bedtime_show;
+  if (data.bedtime_show) {
+    const nowHM = `${String(hour).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
+    const allDone = data.bedtime.every(c => c.done);
+    $("#bedtime").innerHTML = `
+      <div class="chore-head"><h2>🌙 Bedtime</h2><span class="stars">${allDone ? `Sleep well! 💤` : data.summary.school && data.summary.when === "tomorrow" ? "School tomorrow" : "No school tomorrow"}</span></div>
+      ${data.bedtime.map(c => `<button class="todo ${c.done ? "done" : ""}" data-chore="${c.id}">
+        <span class="box">${c.done ? th.star : ""}</span><span class="t">${esc(c.title)}</span>
+        ${c.at ? `<span class="due ${!c.done && c.at <= nowHM ? "soon" : ""}">${fmtTime(c.at)}</span>` : ""}</button>`).join("")}`;
+  }
+
+  // homework and reading: after school (from 3 pm)
+  $("#homework").hidden = !data.homework_show;
+  if (data.homework_show) {
+    const hwDone = data.homework.every(c => c.done);
+    $("#homework").innerHTML = `
+      <div class="chore-head"><h2>📚 Homework &amp; reading</h2><span class="stars">${hwDone ? `All done! ${th.star}` : "Tonight"}</span></div>
+      ${data.homework.map(c => `<button class="todo ${c.done ? "done" : ""}" data-chore="${c.id}">
+        <span class="box">${c.done ? th.star : ""}</span><span class="t">${esc(c.title)}</span></button>`).join("")}`;
+  }
+
+  // rewards the grown-ups picked: how close they are
+  $("#rewards").hidden = !data.rewards.length;
+  if (data.rewards.length) {
+    $("#rewards").innerHTML = `
+      <div class="chore-head"><h2>🎁 My rewards</h2><span class="stars">${th.star} ${data.balance} saved</span></div>
+      ${data.rewards.map(r => {
+        const left = r.cost - data.balance;
+        return `<div class="reward">
+          <div class="reward-top"><span class="t">${esc(r.title)}</span><span class="due">${left <= 0 ? "🎉 You can get it! Ask a grown-up" : `${left} more ${left === 1 ? th.one : th.many}`}</span></div>
+          <div class="reward-track"><i style="width:${Math.min(100, data.balance / r.cost * 100).toFixed(0)}%"></i></div></div>`;
+      }).join("")}`;
+  }
 
   // countdowns: next day off, birthdays, parties
   const cds = [];

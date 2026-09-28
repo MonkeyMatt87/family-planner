@@ -1,5 +1,19 @@
 # Changelog
 
+## v1.1.0 (2026-09-28)
+
+- Bedtime routine (school nights and weekends) and homework & reading checklists, with phone reminders
+- Rewards: the kids save their stars for rewards the adults choose
+- Teacher emails: upload or paste them, review what was found (no-school days, events, Day numbers,
+  gym/music/library days, to-dos, school payments, the teacher) and add the ticked items; OCR for scans
+- Meals: supper plan, grocery list, what's in the house, recipes, cook with what we have, flyer deals
+- Medicine: cabinet, reminders, dose spacing and daily limits, puffers, symptoms, doctor report (print and CSV)
+- Adults' notifications: the 8 pm check, medicine given, homelab alerts; each adult picks their topics
+- Admin page with an overview; choose which tabs each adult's page shows
+- Nightly database backups (kept 14 days), with download and "back up now"
+- The planner image now includes Tesseract and Poppler for reading scans (a larger image)
+- Upgrading from v1.0.0: existing kids get the default bedtime and homework routines once
+
 ## v1.0.0 (2026-09-27)
 
 First public release.

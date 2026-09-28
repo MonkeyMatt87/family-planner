@@ -65,7 +65,7 @@ function show(view) {
 function render() {
   state.today = toISO(new Date());
   const d = new Date();
-  $("#page-sub").textContent = `${DAY_NAMES[d.getDay()]}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
+  if (!ADMIN) $("#page-sub").textContent = `${DAY_NAMES[d.getDay()]}, ${MONTH_NAMES[d.getMonth()]} ${d.getDate()}`;
   return run(() => ({ home: renderHome, tasks: renderTasks, lunch: renderLunch, work: renderWork, bills: renderBills, settings: renderSettings })[state.view]());
 }
 
@@ -100,7 +100,8 @@ async function renderHome() {
     api(`/api/lunch?start=${state.today}&end=${addDays(state.today, 4)}`),
   ]);
 
-  let html = `<div class="row-actions"><button class="btn secondary" id="add-appt-btn">📅 Add an appointment</button></div>`;
+  let html = `<div class="row-actions"><button class="btn secondary" id="add-appt-btn">📅 Add an appointment</button>
+    <a class="btn secondary" href="/meals" style="text-align:center;text-decoration:none">🍽️ Meals &amp; groceries</a></div>`;
   const lunchDay = lunch.find(l => !l.no_school);
   if (lunchDay && state.people.some(p => p.is_kid)) {
     html += `<div class="card lunch-card" data-go="lunch">
@@ -659,9 +660,128 @@ function billForm(b = null) {
 
 // ------------------------------------------------------------ settings
 
+// Settings is split into tabs; /admin is the same page on its own, wider, with an Overview first.
+const ADMIN = location.pathname === "/admin";
+const SET_TABS = [["overview", "📋 Overview"], ["people", "👪 People & sign-in"], ["kids", "🧒 Kids"], ["meds", "💊 Medicine"], ["school", "🏫 School"],
+  ["calendars", "📅 Calendars"], ["work", "💼 Work"], ["alerts", "🔔 Notifications"], ["backups", "💾 Backups"], ["general", "⚙️ General"]];
+
+function showSetTab(tab) {
+  if (!SET_TABS.some(([k]) => k === tab) || (!ADMIN && tab === "overview")) tab = ADMIN ? "overview" : "people";
+  state.setTab = tab;
+  store(ADMIN ? "admin-tab" : "set-tab", tab);
+  document.querySelectorAll("[data-set-tab]").forEach(b => b.classList.toggle("on", b.dataset.setTab === tab));
+  document.querySelectorAll(".set-tab").forEach(s => (s.hidden = s.dataset.tab !== tab));
+  if (ADMIN) $("#page-title").textContent = SET_TABS.find(([k]) => k === tab)[1].replace(/^\S+\s/, "");
+}
+
+const ago = iso => {
+  if (!iso) return "never";
+  const m = Math.round((Date.now() - new Date(iso)) / 60000);
+  return m < 1 ? "just now" : m < 60 ? `${m} min ago` : m < 2880 ? `${Math.round(m / 60)} h ago` : `${Math.round(m / 1440)} days ago`;
+};
+
+// The parts that need more than /api/settings: Overview, Notifications, Rewards, teacher emails.
+async function renderMedsAdmin() {
+  const [data, log] = await Promise.all([api("/api/meds"), api("/api/meds/log?days=60")]);
+  const reportPeople = data.people.filter(p => p.is_kid || data.meds.some(m => m.person_id === p.id));
+  $("#meds-admin").innerHTML = `
+    <p class="hint">The medicine cabinet: add a medicine once, then tick who takes it (each with their own dose if it's different). Daily medicine gets a reminder at its times (a kid's goes to the adults' phones); "as needed" medicine warns if it's too soon. Doses and spacing come from the package or your doctor.</p>
+    <h3 class="section-h">💊 Medicine cabinet</h3>
+    <div class="card list">${data.cabinet.map(c => `
+      <div class="row" data-cab="${c.id}"><div class="row-main">
+        <div class="row-title">${c.kind === "puffer" ? "🫁" : "💊"} ${esc(c.name)}${c.dose ? ` · ${esc(c.dose)}` : ""}</div>
+        <div class="row-meta">${c.times.length ? `Reminders ${c.times.map(fmtTime).join(", ")}` : "As needed"}${c.min_hours ? ` · every ${c.min_hours}h` : ""}${c.max_per_day ? ` · max ${c.max_per_day}/day` : ""}</div>
+        <div class="row-meta">${c.people.length ? c.people.map(t => `${esc(t.name)}${t.dose && t.dose !== c.dose ? ` (${esc(t.dose)})` : ""}${t.puffs_left != null ? ` · ${t.puffs_left} puffs left` : ""}`).join(" · ") : "Nobody takes it yet"}</div></div>
+        <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg></div>`).join("")
+      || `<div class="row"><div class="row-main"><div class="row-meta">The cabinet is empty.</div></div></div>`}
+      <button class="row add-row" id="med-new">+ Add a medicine</button></div>
+    <h3 class="section-h">📄 Doctor reports</h3>
+    <div class="card list"><div class="row"><div class="row-main" style="display:flex;gap:8px;flex-wrap:wrap">${reportPeople.map(p =>
+      `<a class="btn secondary small" href="/report?person=${p.id}">${esc(nameOf(p))}</a>`).join("")}</div></div></div>
+    <h3 class="section-h">History (60 days)</h3>
+    <div class="card list">${log.map(l => `<div class="row"><div class="row-main">
+      <div class="row-title">${esc(l.person)} · ${esc(l.med)}${l.dose ? ` · ${esc(l.dose)}` : ""}</div>
+      <div class="row-meta">${esc(l.at.replace("T", " "))}${l.by_name ? ` · by ${esc(l.by_name)}` : ""}${l.slot ? ` · for ${fmtTime(l.slot)}` : ""}${l.note ? ` · ${esc(l.note)}` : ""}</div></div></div>`).join("")
+      || `<div class="row"><div class="row-main"><div class="row-meta">Nothing logged yet.</div></div></div>`}</div>`;
+  $("#meds-admin").querySelectorAll("[data-cab]").forEach(r => r.addEventListener("click", () =>
+    cabinetForm(data, data.cabinet.find(c => c.id === Number(r.dataset.cab)), () => run(renderMedsAdmin))));
+  $("#med-new").addEventListener("click", () => cabinetForm(data, null, () => run(renderMedsAdmin)));
+  return data;
+}
+
+async function renderAdminExtras() {
+  const [o, rw, medsData] = await Promise.all([api("/api/admin/overview"), api("/api/me/rewards"), renderMedsAdmin()]);
+  const nowHM = new Date().toTimeString().slice(0, 5);
+  const missed = medsData.meds.flatMap(m => m.slots.filter(s => !s.taken && s.time <= nowHM).map(s => ({ m, s })));
+  const ok = (good, text) => `<span class="st ${good ? "good" : "warn"}">${good ? "✅" : "⚠️"}</span> ${text}`;
+  const phones = o.people.filter(p => p.phones);
+  const statusRow = (title, meta) => `<div class="row"><div class="row-main"><div class="row-title">${title}</div><div class="row-meta">${meta}</div></div></div>`;
+  const ow = o.lunch.next_window;
+  $("#overview").innerHTML = `
+    <h3 class="section-h">Needs attention</h3>
+    <div class="card list">
+      ${statusRow(ok(!o.overdue, o.overdue ? `${o.overdue} overdue to-do${o.overdue === 1 ? "" : "s"}` : "No overdue to-dos"), `<a href="/#tasks">Tasks</a>`)}
+      ${o.payments.length ? o.payments.map(r => statusRow(`💳 ${esc(r.title.replace(/^(?:💳|📝|📋|\s)+/u, ""))}`, `${r.name ? esc(r.name) + " · " : ""}${r.due_date ? `due ${esc(relDay(r.due_date, state.today))}` : "no date"}`)).join("")
+        : statusRow(ok(true, "No school payments waiting"), "School payments and forms")}
+      ${o.mail_waiting.length ? o.mail_waiting.map(m => statusRow(`📧 ${m.waiting} teacher email${m.waiting === 1 ? "" : "s"} to review for ${esc(m.name)}`, `<a href="/me">My page → Kids</a>`)).join("")
+        : statusRow(ok(true, "Teacher emails all reviewed"), "")}
+      ${missed.map(({ m, s }) => statusRow(`💊 ${esc(m.person)}: ${esc(m.name)} at ${fmtTime(s.time)} not marked yet`, `Mark it on ${m.is_kid ? "My page → Kids" : "their page → Meds"}`)).join("")}
+      ${ow || o.lunch.synced ? statusRow(`🍽️ School lunch ordering`, ow ? `${ow[0] <= state.today ? "Open now" : `Opens ${esc(relDay(ow[0], state.today))}`} · until ${esc(relDay(ow[1], state.today))}` : "No ordering dates known yet") : ""}
+    </div>
+    <h3 class="section-h">Is everything working?</h3>
+    <div class="card list">
+      ${statusRow(ok(o.backups.last && Date.now() - new Date(o.backups.last) < 36 * 3600e3, "Backups"), `Last ${ago(o.backups.last)} · ${o.backups.count} kept`)}
+      ${statusRow(ok(phones.length, "Notifications"), phones.length ? phones.map(p => `${esc(p.name)} (${p.phones})`).join(" · ") : "No phones yet: tap 🔔 on My page or their phone page")}
+      ${o.calendars.map(c => statusRow(ok(!c.error, `Google calendar: ${esc(c.name)}`), c.error ? `<span class="danger">${esc(c.error.slice(0, 80))}</span>` : "Reading fine")).join("")}
+      ${statusRow(ok(o.google.connected && !o.google.last_error, "Copying appointments to Google"), o.google.connected ? (o.google.last_error ? esc(o.google.last_error.slice(0, 80)) : `${o.google.waiting} waiting`) : "Not set up yet (Calendars tab)")}
+      ${o.lunch.synced || o.lunch.error ? statusRow(ok(!o.lunch.error, "Lunch menu"), o.lunch.error ? esc(o.lunch.error) : `Updated ${ago(o.lunch.synced)}`) : ""}
+      ${o.homelab.last_scan || o.homelab.proxmox || o.homelab.adguard ? `
+      ${statusRow(ok(o.homelab.last_scan && Date.now() - new Date(o.homelab.last_scan) < 30 * 60e3, "Network scan"), `${o.homelab.online} online · ${ago(o.homelab.last_scan)}`)}
+      ${statusRow(ok(!!o.homelab.speed, "Speed test"), o.homelab.speed ? `⬇ ${o.homelab.speed.down_mbps.toFixed(0)} · ⬆ ${o.homelab.speed.up_mbps.toFixed(0)} Mb/s · ${ago(o.homelab.speed.at)}` : "No results yet")}
+      ${statusRow(ok(o.homelab.proxmox && o.homelab.adguard, "Homelab logins"), `Proxmox ${o.homelab.proxmox ? "✓" : "not set"} · AdGuard ${o.homelab.adguard ? "✓" : "not set"} · <a href="/me">My page → Homelab</a>`)}` : ""}
+    </div>
+    <h3 class="section-h">Recent notifications</h3>
+    <div class="card list">${o.pushes.map(p => statusRow(esc(p.title), `${esc(p.name || "")} · ${esc(p.at.replace("T", " ").slice(0, 16))} · ${p.phones} phone${p.phones === 1 ? "" : "s"}`)).join("")
+      || statusRow("None sent yet", "")}</div>`;
+
+  $("#alerts-admin").innerHTML = `
+    <p class="hint">Each phone turns notifications on itself (🔔 on My page, or on their phone page), after the planner is added to the Home Screen.</p>
+    <div class="card list">${o.people.map(p => statusRow(`${esc(nameOf(p))}${p.phones ? ` · 📱 ${p.phones}` : ""}`,
+      p.is_kid ? (p.phones ? "Morning summary at 7:00 and bedtime reminders" : "Reminders not turned on (their page → Turn on reminders)")
+        : p.phones ? [p.topics.includes("evening") && "🌙 8 pm check", p.topics.includes("homelab") && "🖥️ Homelab alerts"].filter(Boolean).join(" · ") || "No topics chosen"
+        : "No phone yet")).join("")}</div>
+    <h3 class="section-h">Sent lately</h3>
+    <div class="card list">${o.pushes.map(p => statusRow(esc(p.title), `${esc(p.name || "")} · ${esc(p.at.slice(0, 16))} · ${p.phones} phone${p.phones === 1 ? "" : "s"}`)).join("") || statusRow("None sent yet", "")}</div>`;
+
+  const kids = state.people.filter(p => p.is_kid);
+  $("#rewards-admin").innerHTML = `
+    <div class="card list">
+      ${kids.map(k => statusRow(`${esc(nameOf(k))}: ${rw.balances[k.id] ?? 0} saved`, rw.given.filter(g => g.person_id === k.id).slice(0, 2).map(g => `🎉 ${esc(g.title)}`).join(" · ") || "Nothing given yet")).join("")}
+      ${rw.rewards.map(r => `<div class="row"><div class="row-main"><div class="row-title">${esc(r.title)}</div>
+        <div class="row-meta">${r.cost} · ${r.person_id ? esc(state.byId[r.person_id]?.name || "") : "Any kid"}</div></div>
+        <button class="icon-btn small" data-del-reward="${r.id}" aria-label="Remove"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`).join("")}
+      <button class="row add-row" id="add-reward">+ Add a reward</button>
+    </div>
+    <p class="hint">Every ticked job, bit of homework and bedtime step saves one. Give rewards on My page → Kids.</p>`;
+  $("#rewards-admin").querySelectorAll("[data-del-reward]").forEach(b => b.addEventListener("click", () => run(async () => {
+    await api(`/api/me/rewards/${b.dataset.delReward}`, { method: "DELETE" }); renderAdminExtras();
+  })));
+  $("#add-reward").addEventListener("click", () => simpleForm({
+    title: "New reward",
+    fields: `<label>Reward<input name="title" required maxlength="80" placeholder="🎬 Pick Friday's movie" autocomplete="off"></label>
+      <div class="two"><label>Costs<input name="cost" type="number" min="1" max="1000" value="20" required></label>
+      <label>For<select name="who"><option value="">Any kid</option>${kids.map(k => `<option value="${k.id}">${esc(k.name)}</option>`).join("")}</select></label></div>`,
+    onSave: f => api("/api/me/rewards", { method: "POST", body: { title: f.title.value, cost: Number(f.cost.value), person_id: f.who.value ? Number(f.who.value) : null } }),
+  }));
+
+  $("#mail-admin").innerHTML = `<h3 class="section-h">📧 Teacher emails</h3>
+    <div class="card list">${statusRow(o.mail_waiting.length ? o.mail_waiting.map(m => `${m.waiting} to review for ${esc(m.name)}`).join(" · ") : "All reviewed",
+      `Upload or paste them on <a href="/me">My page → Kids</a>`)}</div>`;
+}
+
 async function renderSettings() {
-  const [settings, cals, keys, chores, google, countries] = await Promise.all([api("/api/settings"), api("/api/calendars"),
-    api("/api/passkeys"), api("/api/chores"), api("/api/google"), api("/api/setup/countries")]);
+  const [settings, cals, keys, chores, google, countries, backups] = await Promise.all([api("/api/settings"), api("/api/calendars"),
+    api("/api/passkeys"), api("/api/chores"), api("/api/google"), api("/api/setup/countries"), api("/api/backups")]);
   const country = countries.find(c => c.code === settings.holiday_country);
   const rotation = Number(settings.school_rotation || 0);
   state.templates = await api("/api/shift-templates");
@@ -669,7 +789,15 @@ async function renderSettings() {
   const feedBase = `${origin.replace(/\/$/, "")}/feed/${settings.feed_token}`;
   const webcal = u => u.replace(/^https?:\/\//, "webcal://");
 
+  const tab = state.setTab || recall(ADMIN ? "admin-tab" : "set-tab") || (ADMIN ? "overview" : "people");
   $("#view-settings").innerHTML = `
+    <nav class="set-tabs">${SET_TABS.filter(([k]) => ADMIN || k !== "overview").map(([k, label]) =>
+      `<button type="button" data-set-tab="${k}" class="${k === tab ? "on" : ""}">${label}</button>`).join("")}</nav>
+    <div class="set-body">
+    <section class="set-tab" data-tab="overview"><div id="overview"><div class="empty">Loading…</div></div></section>
+    <section class="set-tab" data-tab="alerts"><div id="alerts-admin"><div class="empty">Loading…</div></div></section>
+    <section class="set-tab" data-tab="meds"><div id="meds-admin"><div class="empty">Loading…</div></div></section>
+    <section class="set-tab" data-tab="people">
     <h3 class="section-h">People</h3>
     <div class="card list">${state.people.map(p => `
       <div class="row" data-edit-person="${p.id}">
@@ -679,7 +807,9 @@ async function renderSettings() {
       </div>`).join("")}
       <button class="row add-row" id="add-person">+ Add person</button>
     </div>
+    </section>
 
+    <section class="set-tab" data-tab="kids">
     <h3 class="section-h">Kids</h3>
     ${state.people.filter(p => p.is_kid).map(k => `
       <div class="card list">
@@ -687,11 +817,18 @@ async function renderSettings() {
           <div class="row-meta">Page: <a href="/kids/${encodeURIComponent(k.name.toLowerCase())}">/kids/${esc(k.name.toLowerCase())}</a> (home Wi-Fi)</div></div></div>
         ${chores.filter(c => c.person_id === k.id).map(c => `
           <div class="row"><div class="row-main"><div class="row-title">${esc(c.title)}</div>
-            <div class="row-meta">${c.school_days ? "School days" : "Every day"}</div></div>
+            <div class="row-meta">${c.routine === "day" ? (c.school_days ? "School days" : "Every day")
+              : `${c.routine === "bedtime" ? "🌙 Bedtime" : "📚 Homework & reading"}${c.at ? ` · reminder at ${fmtTime(c.at)}` : ""} · ${
+                ["Every night", "School nights", "Weekends & nights before a day off"][c.school_days] || ""}`}</div></div>
             <button class="icon-btn small" data-del-chore="${c.id}" aria-label="Remove"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button>
           </div>`).join("")}
         <button class="row add-row" data-add-chore="${k.id}">+ Add a job for ${esc(k.name)}</button>
       </div>`).join("")}
+    <h3 class="section-h">🎁 Rewards</h3>
+    <div id="rewards-admin"><div class="empty small">Loading…</div></div>
+    </section>
+
+    <section class="set-tab" data-tab="school">
     <h3 class="section-h">School year</h3>
     <form class="card pad" id="school-form">
       <div class="two">
@@ -710,7 +847,10 @@ async function renderSettings() {
       <p class="hint">Counted from the first day of school. If the school's number is different, put in today's number and it carries on from there.</p>
       <button class="btn" type="submit">Save</button>
     </form>` : ""}
+    <div id="mail-admin"></div>
+    </section>
 
+    <section class="set-tab" data-tab="calendars">
     <h3 class="section-h">Google Calendars</h3>
     <p class="hint">In Google Calendar on a computer: Settings → pick the calendar → “Integrate calendar” → copy <b>Secret address in iCal format</b>.</p>
     <div class="card list">${cals.map(c => `
@@ -734,7 +874,9 @@ async function renderSettings() {
         <svg class="chev" viewBox="0 0 24 24"><path d="M9 6l6 6-6 6"/></svg>
       </div>
     </div>
+    </section>
 
+    <section class="set-tab" data-tab="work">
     <h3 class="section-h">Shift types</h3>
     <div class="card list">${state.templates.map(t => `
       <div class="row" data-edit-tpl="${t.id}">
@@ -743,7 +885,9 @@ async function renderSettings() {
       </div>`).join("")}
       <button class="row add-row" id="add-tpl">+ Add shift type</button>
     </div>
+    </section>
 
+    <section class="set-tab" data-tab="calendars">
     <h3 class="section-h">Show on your iPhone calendar</h3>
     <p class="hint">Tap a link on each iPhone and choose Subscribe. Work shifts and task due dates then show up in the iPhone Calendar app, updating on their own.</p>
     <div class="card list">
@@ -752,7 +896,22 @@ async function renderSettings() {
       <a class="row link-row" href="${esc(webcal(feedBase + "/reminders.ics"))}"><div class="row-main"><div class="row-title">Subscribe: Bills &amp; reminders (adults)</div><div class="row-meta mono">${esc(feedBase)}/reminders.ics</div></div></a>
       <button class="row add-row danger" id="rotate-token">Reset these links (old subscriptions stop working)</button>
     </div>
+    </section>
 
+    <section class="set-tab" data-tab="backups">
+    <h3 class="section-h">💾 Backups</h3>
+    <div class="card list">
+      <div class="row"><div class="row-main"><div class="row-title">Every night at 2:30 on the server</div>
+        <div class="row-meta">${backups.last ? `Last: ${esc(backups.last.replace("T", " "))}` : "None yet"} · the last ${backups.keep} are kept</div></div></div>
+      ${backups.files.slice(0, 3).map(b => `<a class="row link-row" href="/api/backups/${encodeURIComponent(b.name)}">
+        <div class="row-main"><div class="row-title">⬇️ ${esc(b.name)}</div><div class="row-meta">${(b.size / 1024).toFixed(0)} KB</div></div></a>`).join("")}
+      <div class="row"><div class="row-main"><div class="row-title">Copy off the server</div>
+        <div class="row-meta">Not set up yet (to plan: Proxmox storage, a NAS or your PC). Until then, download one now and then.</div></div></div>
+      <button class="row add-row" id="backup-now">Back up now</button>
+    </div>
+    </section>
+
+    <section class="set-tab" data-tab="people">
     <h3 class="section-h">Phone sign-in</h3>
     <p class="hint">Use ${esc(settings.public_url || "the https:// address")} everywhere, at home too. Each phone signs in once with the family PIN or Face ID, then stays signed in. On home Wi-Fi, only the kids' pages and the wall screen open without signing in.</p>
     <form class="card pad" id="pin-form">
@@ -774,7 +933,9 @@ async function renderSettings() {
         ? `<button class="row add-row" id="add-passkey">+ Use Face ID on this phone</button>`
         : `<div class="row"><div class="row-main"><div class="row-meta">To add Face ID, open the planner on the phone from ${esc(settings.public_url || "its https:// address")} (not home Wi-Fi's address) and come back here.</div></div></div>`}
     </div>
+    </section>
 
+    <section class="set-tab" data-tab="school">
     <h3 class="section-h">School lunch menu (optional)</h3>
     <form class="card pad" id="lunch-form">
       <p class="hint">Type or paste your school's menu on the Lunch tab. Schools served by the School Lunch Association in Newfoundland and Labrador can load it automatically:</p>
@@ -784,7 +945,9 @@ async function renderSettings() {
         : settings.lunch_synced_at ? `Last updated ${esc(settings.lunch_synced_at.replace("T", " "))}` : "Not updated yet"}</p>
       <div class="sheet-actions"><button class="btn secondary" type="button" id="lunch-sync">Update now</button><button class="btn" type="submit">Save</button></div>
     </form>
+    </section>
 
+    <section class="set-tab" data-tab="general">
     <h3 class="section-h">General</h3>
     <form class="card pad" id="settings-form">
       <label>Family name (shown on the wall screen)<input name="family_name" value="${esc(settings.family_name || "")}" placeholder="The Smith Family"></label>
@@ -810,10 +973,15 @@ async function renderSettings() {
       <button class="btn" type="submit">Save</button>
     </form>
 
-    <p class="hint center"><a href="/display" target="_blank">Open the wall display</a>${settings.via_internet ? ` · <a href="/logout">Log out</a>` : ""}</p>
+    <p class="hint center">${ADMIN ? "" : `<a href="/admin">🛠️ Admin (everything in tabs)</a> · `}<a href="/display" target="_blank">Open the wall display</a>${settings.via_internet ? ` · <a href="/logout">Log out</a>` : ""}</p>
+    </section>
+    </div>
   `;
 
   const v = $("#view-settings");
+  showSetTab(tab);
+  v.querySelectorAll("[data-set-tab]").forEach(b => b.addEventListener("click", () => showSetTab(b.dataset.setTab)));
+  run(renderAdminExtras);
   v.querySelector("#settings-form").addEventListener("submit", e => {
     e.preventDefault();
     const f = e.target;
@@ -852,10 +1020,15 @@ async function renderSettings() {
   v.querySelectorAll("[data-add-chore]").forEach(b => b.addEventListener("click", () => simpleForm({
     title: `New job for ${state.byId[b.dataset.addChore].name}`,
     fields: `<label>Job<input name="title" required placeholder="🧸 Put toys away" maxlength="80" autocomplete="off"></label>
-      <label class="switch"><input type="checkbox" name="school_days"> Only on school days</label>
-      <p class="hint">Start with an emoji to make it fun. It resets every day.</p>`,
+      <div class="two">
+        <label>Where<select name="routine"><option value="day">Day jobs</option><option value="homework">Homework &amp; reading</option><option value="bedtime">Bedtime routine</option></select></label>
+        <label>Which days<select name="school_days"><option value="1">School days / nights</option><option value="0">Every day / night</option><option value="2">Weekends &amp; nights before a day off</option></select></label>
+      </div>
+      <label>Reminder on their phone (bedtime, optional)<input type="time" name="at"></label>
+      <p class="hint">Start with an emoji to make it fun. It resets every day. Homework shows from 3 pm, bedtime from 4 pm. For homework and bedtime, "school nights" means school tomorrow.</p>`,
     onSave: f => api("/api/chores", { method: "POST", body: {
-      person_id: Number(b.dataset.addChore), title: f.title.value, school_days: f.school_days.checked } }),
+      person_id: Number(b.dataset.addChore), title: f.title.value, school_days: Number(f.school_days.value),
+      routine: f.routine.value, at: f.routine.value !== "day" ? f.at.value : "" } }),
   })));
   v.querySelectorAll("[data-del-chore]").forEach(b => b.addEventListener("click", () => run(async () => {
     await api(`/api/chores/${b.dataset.delChore}`, { method: "DELETE" });
@@ -901,6 +1074,10 @@ async function renderSettings() {
   v.querySelector("#add-person").addEventListener("click", () => personForm());
   v.querySelectorAll("[data-edit-person]").forEach(r => r.addEventListener("click", () => personForm(state.byId[r.dataset.editPerson])));
   v.querySelector("#add-cal").addEventListener("click", () => calendarForm());
+  v.querySelector("#backup-now").addEventListener("click", () => run(async () => {
+    const r = await api("/api/backups", { method: "POST" });
+    toast(`Backed up: ${r.name}`); renderSettings();
+  }));
   v.querySelector("#google-setup").addEventListener("click", () => googleForm(google));
   v.querySelectorAll("[data-edit-cal]").forEach(r => r.addEventListener("click", () => calendarForm(cals.find(c => c.id === Number(r.dataset.editCal)))));
   v.querySelector("#add-tpl").addEventListener("click", () => templateForm());
@@ -970,21 +1147,43 @@ function personForm(p = null) {
         <option value="island" ${p?.theme === "island" ? "selected" : ""}>Island 🌺 (ocean blues)</option>
         <option value="power" ${p?.theme === "power" ? "selected" : ""}>Power-up 🍄 (red, blue and gold)</option>
       </select></label>
-      ${p?.is_kid ? `<p class="hint">Their page: <a href="/kids/${encodeURIComponent(p.name.toLowerCase())}">/kids/${esc(p.name.toLowerCase())}</a> (home Wi-Fi only)</p>` : ""}
+      ${p?.is_kid ? `<p class="hint">Their page: <a href="/kids/${encodeURIComponent(p.name.toLowerCase())}">/kids/${esc(p.name.toLowerCase())}</a> (home Wi-Fi only)</p>
+        <h3 class="section-h">School</h3>
+        <div class="two">
+          <label>Teacher<input name="teacher" value="${esc(p.teacher || "")}" placeholder="Ms. Smith" autocomplete="off"></label>
+          <label>Teacher's email<input name="teacher_email" type="email" value="${esc(p.teacher_email || "")}" autocomplete="off"></label>
+        </div>
+        <label>Class notes (codes, standing reminders)<textarea name="class_notes" rows="3">${esc(p.class_notes || "")}</textarea></label>
+        <p class="hint">The teacher's name shows on their page; the email and notes only on My page → Kids.</p>` : ""}
       ${p && !p.is_kid ? `
         <h3 class="section-h">Their own PIN</h3>
         <div class="two">
           <label>${p.has_pin ? "New PIN (blank = keep)" : "PIN (4–10 digits)"}<input type="password" name="pin" inputmode="numeric" pattern="[0-9]*" minlength="4" maxlength="10" autocomplete="new-password"></label>
-          <label>What they can do<select name="access">
+          <label>What they can do<select name="access" onchange="this.form.querySelectorAll('[data-tabs-for]').forEach(g => (g.hidden = g.dataset.tabsFor !== this.value))">
             <option value="full" ${p.access !== "phone" ? "selected" : ""}>Everything</option>
             <option value="phone" ${p.access === "phone" ? "selected" : ""}>Phone view + own shifts</option>
           </select></label>
         </div>
         ${p.has_pin ? `<label class="switch"><input type="checkbox" name="remove_pin"> Remove their PIN</label>` : ""}
-        <p class="hint">"Phone view + own shifts" opens only ${esc(location.origin)}/mobile and a screen to add and change their own shifts. Changing a PIN signs every phone out (Face ID gets them back in).</p>` : ""}`,
+        <p class="hint">"Phone view + own shifts" opens only ${esc(location.origin)}/mobile and a screen to add and change their own shifts. Changing a PIN signs every phone out (Face ID gets them back in).</p>
+        <h3 class="section-h">Their page shows</h3>
+        ${[["full", MY_PAGE_TABS, "My page (/me)"], ["phone", PHONE_PAGE_TABS, "their phone page"]].map(([access, tabs, where]) => {
+          const on = pageTabsFor(p, tabs);
+          return `<div data-tabs-for="${access}" ${(p.access === "phone" ? "phone" : "full") === access ? "" : "hidden"}>
+            <p class="hint">The tabs at the bottom of ${where}:</p>
+            <div class="tab-checks">${tabs.map(([k, label]) => `<label class="switch"><input type="checkbox" name="tab-${access}-${k}" ${on.includes(k) ? "checked" : ""}> ${label}</label>`).join("")}</div>
+          </div>`;
+        }).join("")}` : ""}`,
     onSave: async f => {
       const body = { name: f.name.value, color: f.color.value, is_kid: f.is_kid.checked, aliases: f.aliases.value, icon: f.icon.value,
         birthday: f.birthday.value, theme: f.theme.value };
+      if (f.teacher) Object.assign(body, { teacher: f.teacher.value, teacher_email: f.teacher_email.value, class_notes: f.class_notes.value });
+      if (f.access) {
+        const access = f.access.value === "phone" ? "phone" : "full";
+        const tabs = access === "phone" ? PHONE_PAGE_TABS : MY_PAGE_TABS;
+        body.page_tabs = tabs.map(([k]) => k).filter(k => f[`tab-${access}-${k}`]?.checked);
+        if (!body.page_tabs.length) throw new Error("Leave at least one tab on");
+      }
       if (!p) return api("/api/people", { method: "POST", body });
       await api(`/api/people/${p.id}`, { method: "PUT", body });
       if (f.access && (f.pin.value || f.remove_pin?.checked || f.access.value !== (p.access || "full"))) {
@@ -1124,6 +1323,15 @@ document.addEventListener("visibilitychange", () => { if (!document.hidden && $(
 
 (async function start() {
   await run(loadPeople);
+  if (ADMIN) {  // /admin: only Settings, as tabs, without touching the phone app's remembered tab
+    document.body.classList.add("admin");
+    document.title = "Admin · Family Planner";
+    state.view = "settings";
+    document.querySelectorAll(".view").forEach(v => (v.hidden = v.id !== "view-settings"));
+    $("#fab").hidden = true;
+    $("#page-sub").innerHTML = `<a href="/">Planner</a> · <a href="/me">My page</a> · <a href="/display" target="_blank">Wall screen</a>`;
+    return render();
+  }
   const hash = location.hash.slice(1);
   const saved = TITLES[hash] ? hash : recall("view");
   show(TITLES[saved] ? saved : "home");

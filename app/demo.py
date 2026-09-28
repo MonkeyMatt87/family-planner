@@ -5,11 +5,12 @@
 Only runs on a planner that hasn't been set up yet. To start over for real afterwards, stop the planner and
 delete data/planner.db.
 """
+import json
 import random
 import sys
 from datetime import date, timedelta
 
-from . import auth, db
+from . import auth, db, meals
 
 PEOPLE = [("Alex", "#f07a1a", 0, "💻"), ("Sam", "#8e5bd6", 0, "🩺"), ("Maya", "#e0529c", 1, ""), ("Leo", "#2e9e5b", 1, "")]
 MENU = ["Chicken wrap", "Pasta with meat sauce", "Pizza day", "Tacos", "Mac & cheese", "Turkey sandwich",
@@ -29,8 +30,32 @@ def main() -> None:
                 db.seed_chores(conn, ids[name])
         conn.execute("UPDATE people SET birthday = ? WHERE id = ?", ((date.today() + timedelta(days=12)).replace(year=2016).isoformat(), ids["Maya"]))
         for k, v in {"family_name": "The Rivera Family", "latitude": "44.6488", "longitude": "-63.5752",
-                     "holiday_country": "CA", "holiday_subdiv": "NS", "temp_unit": "celsius", "lunch_auto": "0"}.items():
+                     "holiday_country": "CA", "holiday_subdiv": "NS", "temp_unit": "celsius", "lunch_auto": "0",
+                     "school_rotation": "6", "flyer_postal": "B3H1A1"}.items():
             conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (k, v))
+        specials = {"Maya": {"1": "👟 Gym", "3": "🎵 Music", "4": "👟 Gym", "6": "📚 Library"},
+                    "Leo": {"2": "👟 Gym", "5": "🎵 Music · 📚 Library"}}
+        for name, days in specials.items():
+            conn.execute("UPDATE people SET specials = ?, teacher = ? WHERE id = ?",
+                         (json.dumps(days), {"Maya": "Ms. Chen", "Leo": "Mr. Okafor"}[name], ids[name]))
+
+        # Rewards, the medicine cabinet and the grocery list, so every tab has something in it.
+        for title, cost in [("🎬 Pick Friday's movie", 15), ("🍦 Ice cream trip", 30), ("🕹️ An extra hour of games", 25)]:
+            conn.execute("INSERT INTO rewards (title, cost) VALUES (?, ?)", (title, cost))
+        cabinet = [("Children's ibuprofen", "med", "7.5 mL", 6, 4, ["Maya", "Leo"]), ("Allergy tablet", "med", "1 tablet", None, None, ["Sam"])]
+        for name, kind, dose, every, most, takers in cabinet:
+            cid = conn.execute("INSERT INTO med_catalog (name, kind, dose, min_hours, max_per_day, times) VALUES (?, ?, ?, ?, ?, ?)",
+                               (name, kind, dose, every, most, "[]" if every else '["08:00"]')).lastrowid
+            for who in takers:
+                conn.execute("INSERT INTO meds (person_id, name, kind, dose, times, min_hours, max_per_day, catalog_id) "
+                             "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                             (ids[who], name, kind, dose, "[]" if every else '["08:00"]', every, most, cid))
+        for name, cat in [("Milk", "🥛 Dairy & eggs"), ("Bananas", "🥦 Produce"), ("Bread", "🍞 Bakery"), ("Chicken thighs", "🥩 Meat & fish")]:
+            conn.execute("INSERT INTO grocery (name, category) VALUES (?, ?)", (name, cat))
+        meals.seed(conn)
+        recipes = [r["id"] for r in conn.execute("SELECT id FROM recipes ORDER BY id LIMIT 5")]
+        for i, rid in enumerate(recipes):
+            conn.execute("INSERT OR REPLACE INTO meal_plan (date, recipe_id) VALUES (?, ?)", ((date.today() + timedelta(days=i)).isoformat(), rid))
 
         t = date.today()
         tasks = [("Science fair poster", "Maya", "project", 4), ("Reading log", "Leo", "school", 1),

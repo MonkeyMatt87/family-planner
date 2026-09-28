@@ -173,3 +173,12 @@ body[data-theme="power"] .add button { background: #049cd8; }
   body[data-theme="power"] .cd .num { color: #1d1d1d; }
   body[data-theme="power"] .cd .what { color: #1d1d1d; }
 }
+
+/* ---------- rewards */
+.reward { padding: 8px 0; }
+.reward + .reward { border-top: 1px solid color-mix(in srgb, var(--muted) 18%, transparent); }
+.reward-top { display: flex; justify-content: space-between; gap: 8px; align-items: baseline; flex-wrap: wrap; }
+.reward-top .t { font-weight: 800; }
+.reward-top .due { font-size: 13px; font-weight: 800; color: var(--muted); }
+.reward-track { height: 12px; border-radius: 6px; background: color-mix(in srgb, var(--muted) 18%, transparent); overflow: hidden; margin-top: 6px; }
+.reward-track i { display: block; height: 100%; border-radius: 6px; background: var(--kid); }

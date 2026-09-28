@@ -1,0 +1,81 @@
+/* Meals (/meals): suppers, the grocery list, what's in the house, recipes, flyer deals. Builds on style.css. */
+
+.week-nav { display: flex; align-items: center; justify-content: space-between; margin: 6px 0 8px; }
+.week-nav h2 { margin: 0; font-size: 17px; }
+.supper { display: flex; align-items: center; gap: 12px; padding: 12px 16px; border-top: 1px solid var(--line); cursor: pointer; }
+.supper:first-child { border-top: 0; }
+.supper .day { width: 64px; flex: none; }
+.supper .day b { display: block; font-size: 15px; }
+.supper .day span { font-size: 12px; color: var(--muted); }
+.supper .what { flex: 1; min-width: 0; font-size: 16px; }
+.supper .what.empty-slot { color: var(--muted); font-size: 14px; }
+.supper.today { background: color-mix(in srgb, var(--accent) 8%, transparent); }
+.supper.today .day b { color: var(--accent); }
+
+.add-bar { display: flex; gap: 8px; margin: 4px 0 10px; }
+.add-bar input { flex: 1; margin: 0; }
+.add-bar .btn { flex: none; padding: 10px 16px; }
+.gro { display: flex; align-items: center; gap: 12px; padding: 10px 16px; border-top: 1px solid var(--line); }
+.gro:first-of-type { border-top: 0; }
+.gro .box { width: 26px; height: 26px; flex: none; border-radius: 8px; border: 2px solid var(--line); background: none; cursor: pointer; display: grid; place-items: center; color: #fff; font-size: 15px; }
+.gro.done .box { background: var(--buy); border-color: var(--buy); }
+.gro.done .gname { text-decoration: line-through; color: var(--muted); }
+.gro .gmain { flex: 1; min-width: 0; cursor: pointer; }
+.gro .gname { font-size: 16px; }
+.gro .gqty { color: var(--muted); font-size: 14px; margin-left: 4px; }
+.gro .gmeta { font-size: 12px; color: var(--muted); }
+.deal-badge { display: inline-block; font-size: 12px; font-weight: 700; padding: 2px 8px; border-radius: 999px; margin-top: 3px;
+  background: color-mix(in srgb, var(--buy) 16%, transparent); color: var(--buy); }
+@media (prefers-color-scheme: dark) { .deal-badge { color: #6fd39a; } }
+.group-h { font-size: 13px; font-weight: 700; color: var(--muted); padding: 8px 16px 4px; background: var(--bg); border-top: 1px solid var(--line); }
+.card.list > .group-h:first-child { border-top: 0; }
+
+.deal { display: grid; grid-template-columns: 56px 1fr auto; gap: 10px; align-items: center; padding: 9px 12px; border-top: 1px solid var(--line); }
+.deal:first-child { border-top: 0; }
+.deal img { width: 56px; height: 56px; object-fit: contain; border-radius: 8px; background: #fff; }
+.deal .noimg { width: 56px; height: 56px; border-radius: 8px; background: var(--chip); display: grid; place-items: center; font-size: 22px; }
+.deal .dname { font-size: 14px; line-height: 1.3; }
+.deal .dmeta { font-size: 12px; color: var(--muted); margin-top: 2px; }
+.deal .dprice { font-weight: 800; font-size: 15px; white-space: nowrap; text-align: right; }
+.deal .dprice small { display: block; font-weight: 600; font-size: 11px; color: var(--muted); }
+.deal .add-btn { margin-top: 4px; }
+
+.store-chips { display: flex; flex-wrap: wrap; gap: 6px; margin: 4px 0 8px; }
+.store-chips .chip { display: inline-flex; align-items: center; gap: 6px; }
+.store-chips .chip img { width: 18px; height: 18px; border-radius: 4px; background: #fff; object-fit: contain; }
+.flyer-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; }
+.fitem { background: var(--card); border-radius: 12px; box-shadow: var(--shadow); padding: 8px; display: flex; flex-direction: column; gap: 4px; }
+.fitem img { width: 100%; height: 110px; object-fit: contain; background: #fff; border-radius: 8px; }
+.fitem .fname { font-size: 13px; line-height: 1.3; flex: 1; }
+.fitem .fprice { font-weight: 800; font-size: 14px; }
+.watch-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+.watch-chips .chip b { margin-left: 6px; opacity: .6; }
+
+.idea { padding: 10px 16px; border-top: 1px solid var(--line); }
+.idea:first-child { border-top: 0; }
+.idea .iname { font-size: 16px; font-weight: 600; display: flex; justify-content: space-between; gap: 8px; align-items: baseline; }
+.idea .have { font-size: 13px; color: var(--buy); }
+.idea .missing { font-size: 13px; color: var(--muted); }
+.meter-mini { height: 6px; border-radius: 3px; background: var(--chip); overflow: hidden; margin: 5px 0; }
+.meter-mini i { display: block; height: 100%; background: var(--buy); border-radius: 3px; }
+.recipe-pick { max-height: 45vh; overflow: auto; margin-bottom: 10px; }
+.chip.small { padding: 6px 11px; font-size: 13px; }
+.mono-small { font-size: 12px; color: var(--muted); }
+.mail-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+.btn.small { padding: 7px 12px; font-size: 13px; }
+.btn.small:disabled { opacity: .5; }
+.gqty { color: var(--muted); font-size: 14px; margin-left: 4px; font-weight: 400; }
+
+/* cook with what we have */
+.cook-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+.cook-card { display: flex; flex-direction: column; gap: 3px; text-align: left; border: 0; padding: 0 0 10px; border-radius: 14px; overflow: hidden;
+  background: var(--card); box-shadow: var(--shadow); color: var(--text); font: inherit; cursor: pointer; }
+.cook-card img { width: 100%; aspect-ratio: 1; object-fit: cover; display: block; background: var(--chip); }
+.cook-card .cname { font-weight: 700; font-size: 14px; padding: 4px 10px 0; line-height: 1.25; }
+.cook-card .cmeta { font-size: 12px; color: var(--muted); padding: 0 10px; }
+.cook-hero { width: calc(100% + 32px); margin: -8px -16px 10px; max-height: 220px; object-fit: cover; display: block; }
+.rank { display: flex; justify-content: space-between; gap: 10px; padding: 8px 16px; border-top: 1px solid var(--line); font-size: 14px; }
+.rank:first-child { border-top: 0; }
+.rank .rnum { color: var(--muted); text-align: right; }
+.mail-body summary { cursor: pointer; color: var(--accent); font-size: 14px; margin: 8px 0 4px; }
+.mail-body pre { white-space: pre-wrap; font-family: inherit; font-size: 14px; line-height: 1.5; background: var(--bg); border-radius: 10px; padding: 10px 12px; max-height: 320px; overflow: auto; }

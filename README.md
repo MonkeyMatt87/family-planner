@@ -22,6 +22,21 @@ and a fun page for each kid. It runs on your own server: a Proxmox LXC, a mini P
   a lunch planner, work shifts and bills.
 - **Kids' pages** with chores and weekly stars, to-dos they can add themselves, countdowns to birthdays
   and days off, a joke and a fact of the day, and optional 7 am school-morning notifications.
+- **Bedtime and homework routines**: a checklist for school nights and one for weekends, with a reminder
+  on the kid's phone for each step that isn't ticked. **Rewards** the kids save their stars for.
+- **Teacher emails**: upload an Outlook `.msg`, an `.eml`, a PDF or a photo (or paste the text) and the
+  planner picks out no-school days, events, "Day N" numbers, gym and music days, to-dos and school
+  payments (Rycor, School Cash Online and similar) for you to tick. Scans and photos are read with Tesseract OCR.
+- **Meals**: a supper plan (on the wall screen too), a shared grocery list sorted by aisle, what's in the
+  house, recipes, "cook with what we have" ideas (your recipes plus TheMealDB), and flyer deals near your
+  postal or ZIP code (Flipp, US and Canada).
+- **Medicine**: a medicine cabinet, pill reminders with a follow-up, spacing and daily limits for kids'
+  medicine (with a warning if it's too soon), puffer counters, temperatures and symptoms, and a printable
+  doctor report with a spreadsheet.
+- **Notifications for the adults**: an 8 pm "tomorrow" check (school day, gym, lunches, appointments,
+  forms, low puffers, unticked homework), medicine given to a kid, and homelab alerts.
+- **Admin page** (`/admin`): every setting in tabs, with an overview of what needs attention and whether
+  everything is working. Choose which tabs each adult's page shows.
 - **Work shifts**: tap days on a month grid, or type a week the way a paper schedule looks
   ("Mon 8-11 Office, 5:30-7:30pm Clinic").
 - **Google Calendar**: shows your family's Google calendars, and can copy appointments made in the
@@ -156,8 +171,9 @@ the server and are never sent to a browser.
 
 - **Update:** run the installer again (on Proxmox: `pct exec <id> -- bash /root/install.sh`). Your
   data and `.env` are kept.
-- **Back up:** everything is in `/opt/family-planner/data/planner.db` (plus `.env`). Proxmox backups
-  of the LXC cover both.
+- **Back up:** everything is in `/opt/family-planner/data/planner.db` (plus `.env`). The planner makes
+  a copy every night at 2:30 in `data/backups` (the last 14 are kept); Admin → Backups can download one.
+  Proxmox backups of the LXC cover all of it.
 - **Remove:** `cd /opt/family-planner && docker compose down`, then delete the folder, or delete the LXC.
 
 ## Development

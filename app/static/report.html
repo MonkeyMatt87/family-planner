@@ -1,0 +1,71 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Medicine report</title>
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <style>
+    .controls { display: grid; gap: 8px; grid-template-columns: 1fr 1fr; margin: 6px 0 12px; }
+    .controls label { margin: 0; }
+    .controls .full { grid-column: 1 / -1; }
+    .ranges { display: flex; gap: 6px; flex-wrap: wrap; grid-column: 1 / -1; }
+    .actions { display: flex; gap: 8px; flex-wrap: wrap; grid-column: 1 / -1; }
+    .actions .btn { flex: 1; text-align: center; }
+    .report { background: var(--card); border-radius: 14px; box-shadow: var(--shadow); padding: 18px 18px 8px; }
+    .report h1 { font-size: 22px; margin: 0 0 2px; }
+    .report h2 { font-size: 15px; margin: 18px 0 6px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); }
+    .report .meta { color: var(--muted); font-size: 13px; }
+    table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    th, td { text-align: left; padding: 6px 6px; border-bottom: 1px solid var(--line); vertical-align: top; }
+    th { font-size: 12px; color: var(--muted); font-weight: 700; }
+    td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; }
+    .days { overflow-x: auto; }
+    .days table { font-size: 12px; }
+    .days td, .days th { text-align: center; padding: 4px 3px; min-width: 26px; }
+    .days td:first-child, .days th:first-child { text-align: left; min-width: 120px; }
+    .days td.hit { font-weight: 800; background: color-mix(in srgb, var(--accent) 14%, transparent); }
+    .none { color: var(--muted); font-size: 14px; padding: 4px 0 10px; }
+    .fever { color: var(--danger); font-weight: 700; }
+    .foot { color: var(--muted); font-size: 12px; margin: 14px 0 6px; }
+    @media print {
+      :root { --bg: #fff; --card: #fff; --text: #000; --muted: #444; --line: #bbb; }
+      body { background: #fff; }
+      .top, .controls, .no-print { display: none !important; }
+      main { max-width: none; padding: 0; }
+      .report { box-shadow: none; padding: 0; }
+      .days td.hit { background: #e6e6e6; }
+    }
+  </style>
+</head>
+<body class="no-tabs">
+  <header class="top">
+    <div>
+      <h1>📄 Doctor report</h1>
+      <div class="sub"><a href="#" id="back-link">← Back</a></div>
+    </div>
+  </header>
+  <main>
+    <form class="controls" id="controls">
+      <label class="full">Who<select name="person"></select></label>
+      <div class="ranges">
+        <button type="button" class="chip small" data-days="7">7 days</button>
+        <button type="button" class="chip small" data-days="14">2 weeks</button>
+        <button type="button" class="chip small" data-days="30">30 days</button>
+        <button type="button" class="chip small" data-days="90">3 months</button>
+      </div>
+      <label>From<input type="date" name="start"></label>
+      <label>To<input type="date" name="end"></label>
+      <div class="actions">
+        <button type="button" class="btn" id="print">🖨️ Print / Save as PDF</button>
+        <a class="btn secondary" id="csv" href="#">⬇️ Spreadsheet</a>
+      </div>
+    </form>
+    <div class="report" id="report"><div class="empty">Loading…</div></div>
+  </main>
+  <div class="toast" id="toast" hidden></div>
+  <script src="/common.js"></script>
+  <script src="/report.js"></script>
+</body>
+</html>
