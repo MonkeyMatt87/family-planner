@@ -37,6 +37,9 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Image name (ghcr.io needs it in lowercase)
+        id: name
+        run: echo "image=ghcr.io/${GITHUB_REPOSITORY_OWNER,,}/family-planner" >> "$GITHUB_OUTPUT"
       - name: Planner image (amd64 + arm64, for a Raspberry Pi 4/5 too)
         uses: docker/build-push-action@v6
         with:
@@ -44,5 +47,5 @@ jobs:
           platforms: linux/amd64,linux/arm64
           push: true
           tags: |
-            ghcr.io/${{ github.repository_owner }}/family-planner:${{ github.ref_name }}
-            ghcr.io/${{ github.repository_owner }}/family-planner:latest
+            ${{ steps.name.outputs.image }}:${{ github.ref_name }}
+            ${{ steps.name.outputs.image }}:latest
