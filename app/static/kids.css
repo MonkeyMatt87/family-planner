@@ -182,3 +182,9 @@ body[data-theme="power"] .add button { background: #049cd8; }
 .reward-top .due { font-size: 13px; font-weight: 800; color: var(--muted); }
 .reward-track { height: 12px; border-radius: 6px; background: color-mix(in srgb, var(--muted) 18%, transparent); overflow: hidden; margin-top: 6px; }
 .reward-track i { display: block; height: 100%; border-radius: 6px; background: var(--kid); }
+
+/* money */
+.money .line { font-weight: 700; padding: 5px 0; font-size: 16px; }
+.money .line + .line { border-top: 1px dashed color-mix(in srgb, var(--muted) 25%, transparent); }
+.money .line.small { font-size: 14px; font-weight: 600; color: var(--muted); }
+.money .big-money { font-size: 22px; }

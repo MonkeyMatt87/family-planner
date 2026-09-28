@@ -1,0 +1,52 @@
+/* House (/house): upkeep, contacts, the sitter sheet. Builds on style.css. */
+
+.btn.wide { display: block; width: 100%; margin: 12px 0 4px; }
+.danger-text { color: var(--danger, #d64545); }
+.all-good { font-size: 15px; margin-bottom: 4px; }
+.muted { color: var(--muted); }
+.tag { display: inline-block; font-size: 11px; font-weight: 700; padding: 1px 7px; border-radius: 999px; vertical-align: 2px;
+  background: color-mix(in srgb, var(--accent) 14%, transparent); color: var(--accent); }
+
+.job { display: flex; align-items: center; gap: 10px; padding: 12px 16px; border-top: 1px solid var(--line); }
+.job:first-child { border-top: 0; }
+.job-main { flex: 1; min-width: 0; cursor: pointer; }
+.job-title { font-size: 16px; font-weight: 600; }
+.job-meta { font-size: 13px; color: var(--muted); margin-top: 2px; }
+.job .btn { flex: none; }
+.job.overdue .due { color: var(--danger, #d64545); }
+.job.soon .due { color: #c77700; }
+@media (prefers-color-scheme: dark) { .job.soon .due { color: #f0a640; } }
+
+.add-bar { display: flex; gap: 8px; margin: 4px 0 6px; }
+.add-bar input { flex: 1; margin: 0; }
+.add-bar .btn { flex: none; padding: 10px 16px; }
+.contact { padding: 12px 16px; border-top: 1px solid var(--line); }
+.contact:first-child { border-top: 0; }
+.contact-main.tap { cursor: pointer; }
+.c-name { font-size: 16px; font-weight: 600; }
+.c-meta { font-size: 13px; color: var(--muted); margin-top: 2px; overflow-wrap: anywhere; }
+.c-actions { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 8px; }
+.c-actions:empty { display: none; }
+.c-actions .btn { text-decoration: none; }
+
+.sitter h2 { margin: 0 0 4px; font-size: 22px; }
+.s-big { font-size: 18px; font-weight: 600; margin: 4px 0 6px; }
+.s-h { font-size: 14px; text-transform: uppercase; letter-spacing: .04em; color: var(--muted); margin: 18px 0 6px; }
+.s-contact { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-top: 1px solid var(--line); font-size: 15px; }
+.s-contact:first-of-type { border-top: 0; }
+.s-num { font-weight: 700; white-space: nowrap; text-align: right; }
+.s-num a { color: inherit; text-decoration: none; }
+.s-kid { padding: 8px 0; border-top: 1px solid var(--line); }
+.s-kid h3 { margin: 0 0 4px; font-size: 17px; }
+.s-line { font-size: 14px; margin: 3px 0; }
+.s-notes { font-size: 15px; line-height: 1.5; }
+.s-foot { font-size: 12px; margin-top: 16px; }
+
+@media print {
+  body { background: #fff; color: #000; }
+  .top, .tabs, .no-print, .toast { display: none !important; }
+  main { padding: 0; max-width: none; }
+  .sitter { box-shadow: none; padding: 0; border: 0; }
+  .s-contact, .s-kid { border-color: #ccc; }
+  .s-num a, .muted { color: #000; }
+}

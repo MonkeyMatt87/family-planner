@@ -307,6 +307,63 @@ CREATE TABLE IF NOT EXISTS symptoms (
     by_person INTEGER
 );
 
+-- A kid's money (in cents): weekly allowance, stars cashed in, gifts, and what they spent (negative).
+-- week is set on allowance rows ("2026-W40") so each week is paid once.
+CREATE TABLE IF NOT EXISTS money_log (
+    id        INTEGER PRIMARY KEY,
+    person_id INTEGER NOT NULL REFERENCES people(id) ON DELETE CASCADE,
+    cents     INTEGER NOT NULL,
+    kind      TEXT NOT NULL DEFAULT 'other',   -- allowance, stars, gift, spent, other
+    note      TEXT NOT NULL DEFAULT '',
+    stars     INTEGER NOT NULL DEFAULT 0,      -- stars cashed in (their reward_log row takes them off)
+    week      TEXT NOT NULL DEFAULT '',
+    at        TEXT NOT NULL,
+    by_person INTEGER
+);
+CREATE UNIQUE INDEX IF NOT EXISTS money_log_week ON money_log(person_id, week) WHERE week != '';
+
+-- Car and house upkeep (/house). due is the next time it's needed (NULL until it's first done or dated).
+-- fixed = 1: the same date every time (tires in November); 0: counted from the day it was done (oil change).
+CREATE TABLE IF NOT EXISTS upkeep (
+    id           INTEGER PRIMARY KEY,
+    title        TEXT NOT NULL,
+    area         TEXT NOT NULL DEFAULT 'house',   -- car, house, yard, other
+    what         TEXT NOT NULL DEFAULT '',        -- which car ("Honda"), which room
+    every_months INTEGER,
+    fixed        INTEGER NOT NULL DEFAULT 0,
+    due          TEXT,
+    remind_days  INTEGER NOT NULL DEFAULT 7,
+    notes        TEXT NOT NULL DEFAULT '',
+    active       INTEGER NOT NULL DEFAULT 1,
+    sort         INTEGER NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS upkeep_log (
+    id        INTEGER PRIMARY KEY,
+    upkeep_id INTEGER NOT NULL REFERENCES upkeep(id) ON DELETE CASCADE,
+    done      TEXT NOT NULL,
+    note      TEXT NOT NULL DEFAULT '',
+    cost      INTEGER,                  -- cents
+    km        INTEGER,
+    by_person INTEGER
+);
+
+-- Phone numbers that matter (/house → Contacts). sitter = 1 puts it on the printable sitter sheet.
+CREATE TABLE IF NOT EXISTS contacts (
+    id         INTEGER PRIMARY KEY,
+    name       TEXT NOT NULL,
+    role       TEXT NOT NULL DEFAULT '',     -- "Family doctor", "Babysitter", "Grandma"
+    grp        TEXT NOT NULL DEFAULT 'other', -- family, emergency, health, school, sitters, other
+    phone      TEXT NOT NULL DEFAULT '',
+    phone2     TEXT NOT NULL DEFAULT '',
+    email      TEXT NOT NULL DEFAULT '',
+    address    TEXT NOT NULL DEFAULT '',
+    notes      TEXT NOT NULL DEFAULT '',
+    person_id  INTEGER REFERENCES people(id) ON DELETE SET NULL,  -- whose (a kid's doctor, say)
+    sitter     INTEGER NOT NULL DEFAULT 0,
+    sort       INTEGER NOT NULL DEFAULT 0
+);
+
 CREATE TABLE IF NOT EXISTS settings (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL

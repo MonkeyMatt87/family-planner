@@ -30,7 +30,7 @@ from fastapi.responses import FileResponse, HTMLResponse, JSONResponse, Redirect
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
-from . import __version__, auth, calendars, db, gcal, holidays, homelab, kids_content, lunch_sync, meals, meds, passkeys, push, school, school_mail, shift_text
+from . import __version__, auth, calendars, db, gcal, holidays, homelab, house, kids_content, lunch_sync, meals, meds, passkeys, push, school, school_mail, shift_text
 
 logging.basicConfig(level=logging.INFO)
 TZ = ZoneInfo(os.environ.get("TZ") or "UTC")
@@ -43,10 +43,13 @@ db.init()
 app.include_router(passkeys.router)
 app.include_router(meals.router)
 app.include_router(meds.router)
+app.include_router(house.router)
 meds.set_tz(TZ)
+house.set_tz(TZ)
 with db.db() as _conn:
     meals.seed(_conn)  # starter suppers, once
     meds.link_cabinet(_conn)  # older medicines get their cabinet entry
+    house.seed(_conn)  # common car and house jobs, and the emergency numbers for the family's country, once
 
 
 # Pages link their .js/.css as "/app.js?v=<ASSET_VERSION>". The version changes whenever any file in
@@ -966,7 +969,8 @@ def weather(conn) -> dict | None:
         r = httpx.get("https://api.open-meteo.com/v1/forecast", timeout=10, params={
             "latitude": lat, "longitude": lon, "timezone": str(TZ), "forecast_days": 7,
             "current": "temperature_2m,weather_code",
-            "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max",
+            "daily": "weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max,precipitation_sum,"
+                     "snowfall_sum,apparent_temperature_min,apparent_temperature_max,wind_gusts_10m_max,uv_index_max",
             "temperature_unit": units,
         })
         r.raise_for_status()
@@ -981,11 +985,54 @@ def weather(conn) -> dict | None:
                     j["daily"]["temperature_2m_min"], j["daily"]["precipitation_probability_max"])
             ],
         }
+        daily = j["daily"]
+        for i, day in enumerate(data["daily"]):
+            f = lambda k: (daily.get(k) or [None] * 7)[i]
+            day["hints"] = dress_hints(f("apparent_temperature_min"), f("apparent_temperature_max"), day["rain"] or 0,
+                                       f("precipitation_sum") or 0, f("snowfall_sum") or 0, f("wind_gusts_10m_max") or 0,
+                                       f("uv_index_max") or 0, units)
         _weather_cache.update(at=time.time(), key=key, data=data)
         return data
     except Exception as exc:
         logging.warning("weather fetch failed: %s", exc)
         return _weather_cache["data"]
+
+
+def dress_hints(feels_lo, feels_hi, rain_pct, rain_mm, snow_cm, gusts_kmh, uv, units="celsius") -> list[str]:
+    """What to wear or bring, from a day's forecast (the "feels like" low is the walk to school)."""
+    c = (lambda v: None if v is None else (v - 32) * 5 / 9) if units == "fahrenheit" else (lambda v: v)
+    lo, hi = c(feels_lo), c(feels_hi)
+    out = []
+    if snow_cm >= 1:
+        out.append("❄️ Snow: boots, snow pants and mittens")
+    elif rain_pct >= 60 and rain_mm >= 1:
+        out.append("☔ Rain: raincoat and rain boots")
+    elif rain_pct >= 40:
+        out.append("🌂 Maybe rain: bring a raincoat")
+    if lo is not None:
+        if lo <= -15:
+            out.append("🥶 Very cold: warmest coat, hat, mittens, and cover your face")
+        elif lo <= -5:
+            out.append("🧣 Cold: winter coat, hat, mittens and a scarf")
+        elif lo <= 2:
+            out.append("🧥 Winter coat, hat and mittens")
+        elif lo <= 9:
+            out.append("🧥 A warm jacket")
+        elif lo <= 15 and (hi is None or hi <= 22):
+            out.append("🧥 A light jacket or hoodie")
+    if gusts_kmh >= 70:
+        out.append("💨 Very windy: hold on to your hat")
+    elif gusts_kmh >= 50:
+        out.append("💨 Windy")
+    if hi is not None and hi >= 27:
+        out.append("🧢 Hot: sun hat, water bottle and sunscreen")
+    elif uv >= 6 and not snow_cm:
+        out.append("🧴 Strong sun: sunscreen")
+    return out
+
+
+def _day_weather(w: dict | None, d: date) -> dict | None:
+    return next((x for x in (w or {}).get("daily", []) if x["date"] == d.isoformat()), None)
 
 
 @app.get("/api/dashboard")
@@ -1350,6 +1397,9 @@ def kid_page(pid: int):
         summary = _school_day(conn, focus, kid["name"])
         summary["when"] = "today" if focus == t else "tomorrow"
         summary["lunch"] = next((l for l in lunch if l["date"] == focus.isoformat()), None)
+        w = weather(conn)
+        fw = _day_weather(w, focus)
+        summary["weather"] = {"code": fw["code"], "hi": fw["hi"], "lo": fw["lo"], "hints": fw.get("hints", [])} if fw else None
 
         # Chores for today, and stars earned this week (Monday to today).
         closures = _school_closures(conn)
@@ -1391,7 +1441,7 @@ def kid_page(pid: int):
                    for i in items if i["source"] in ("google", "appt") and PARTY.search(i["title"])]
 
         return {
-            "kid": kid, "today": t.isoformat(), "weather": weather(conn), "summary": summary,
+            "kid": kid, "today": t.isoformat(), "weather": w, "summary": summary, "money": _money(conn, pid, brief=True),
             "days": [{"date": (t + timedelta(days=i)).isoformat(),
                       "items": [x for x in items if x["date"] == (t + timedelta(days=i)).isoformat()]} for i in range(7)],
             "lunch": lunch, "tasks": tasks, "chores": chores, "stars": stars,
@@ -1426,8 +1476,8 @@ def _morning_message(pid: int) -> tuple[str, str, str] | None:
         parts.append(info["event"])
     if w:
         d0 = w["daily"][0]
-        tip = "☔ raincoat" if d0["rain"] >= 50 else "🧤 hat and mittens" if d0["hi"] <= 2 else "🧥 jacket" if d0["hi"] < 12 else ""
-        parts.append(f"{weatherish(w['code'])} {w['temp']}°, high {d0['hi']}°" + (f" · {tip}" if tip else ""))
+        parts.append(f"{weatherish(w['code'])} {w['temp']}°, high {d0['hi']}°")
+        parts += d0.get("hints", [])[:2]
     parts.append(f"🚌 Bus at 8:30 · {jobs} jobs to tick off")
     return f"☀️ Good morning, {kid['name']}!", "\n".join(parts), f"/kids/{kid['name'].lower()}"
 
@@ -2261,6 +2311,7 @@ def setup_save(request: Request, body: SetupIn):
                      "longitude": body.longitude.strip(), "temp_unit": body.temp_unit,
                      "public_url": body.public_url.strip().rstrip("/"), "lunch_auto": "0"}.items():
             conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value", (k, v))
+        house.seed_emergency(conn)
     auth.set_password(body.pin)
     holidays.reset()
     _setup_done["value"] = True
@@ -2329,6 +2380,157 @@ def me_give_reward(rid: int, body: GiveIn):
         conn.execute("INSERT INTO reward_log (person_id, title, cost, at) VALUES (?, ?, ?, ?)",
                      (kid["id"], r["title"], r["cost"], datetime.now(TZ).isoformat(timespec="minutes")))
         return {"balance": _star_balance(conn, kid["id"])}
+
+
+# ---------------------------------------------------------------- money (My page → Kids; the kids see their balance)
+# Each kid's settings are in the setting money_<id>: weekly (cents), payday (0 = Monday), need_stars (the stars they
+# must earn that week for the allowance, 0 = none) and star_cents (what one saved star is worth when cashed in, 0 = off).
+
+MONEY_DEFAULT = {"weekly": 0, "payday": 5, "need_stars": 0, "star_cents": 0}
+
+
+def _dollars(cents: int) -> str:
+    return f"{'-' if cents < 0 else ''}${abs(cents) / 100:,.2f}"
+
+
+def _money_settings(conn, pid: int) -> dict:
+    raw = db.get_setting(conn, f"money_{pid}")
+    return {**MONEY_DEFAULT, **(json.loads(raw) if raw else {})}
+
+
+def _week_stars(conn, pid: int, d: date) -> int:
+    monday = d - timedelta(days=d.weekday())
+    return conn.execute("SELECT COUNT(*) FROM chore_done d JOIN chores c ON c.id = d.chore_id WHERE c.person_id = ? "
+                        "AND d.date >= ? AND d.date <= ?", (pid, monday.isoformat(), d.isoformat())).fetchone()[0]
+
+
+def _money(conn, pid: int, brief: bool = False) -> dict | None:
+    m = _money_settings(conn, pid)
+    balance = conn.execute("SELECT COALESCE(SUM(cents), 0) FROM money_log WHERE person_id = ?", (pid,)).fetchone()[0]
+    log = db.rows(conn.execute("SELECT l.*, p.name AS by_name FROM money_log l LEFT JOIN people p ON p.id = l.by_person "
+                               "WHERE l.person_id = ? ORDER BY l.at DESC, l.id DESC LIMIT ?", (pid, 5 if brief else 30)))
+    if brief and not (m["weekly"] or m["star_cents"] or log):
+        return None  # money isn't used for this kid
+    t = today()
+    payday = t + timedelta(days=(m["payday"] - t.weekday()) % 7)
+    return {"balance": balance, "settings": m, "log": log, "next_payday": payday.isoformat() if m["weekly"] else None,
+            "week_stars": _week_stars(conn, pid, t), "stars": _star_balance(conn, pid)}
+
+
+def _money_add(conn, pid: int, cents: int, kind: str, note: str, by: int | None = None, stars: int = 0, week: str = "") -> None:
+    conn.execute("INSERT INTO money_log (person_id, cents, kind, note, stars, week, at, by_person) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                 (pid, cents, kind, note, stars, week, datetime.now(TZ).replace(tzinfo=None).isoformat(timespec="minutes"), by))
+
+
+def pay_allowances(now: datetime) -> list[tuple[int, str, str]]:
+    """On each kid's payday (from 8 am), add the week's allowance once. Returns (kid, title, body) to tell them."""
+    if now.hour < 8:
+        return []
+    out = []
+    with db.db() as conn:
+        for k in db.rows(conn.execute("SELECT id, name FROM people WHERE is_kid = 1")):
+            m = _money_settings(conn, k["id"])
+            if not m["weekly"] or now.weekday() != m["payday"]:
+                continue
+            y, w, _ = now.date().isocalendar()
+            week = f"{y}-W{w:02d}"
+            if conn.execute("SELECT 1 FROM money_log WHERE person_id = ? AND week = ?", (k["id"], week)).fetchone():
+                continue
+            stars = _week_stars(conn, k["id"], now.date())
+            short = bool(m["need_stars"]) and stars < m["need_stars"]
+            try:  # the unique (person, week) index makes sure a week is only ever paid once
+                _money_add(conn, k["id"], 0 if short else m["weekly"], "allowance",
+                           f"No allowance this week: {stars} of {m['need_stars']} stars" if short else "Weekly allowance", week=week)
+            except sqlite3.IntegrityError:
+                continue
+            if short:
+                out.append((k["id"], "💰 No allowance this week", f"You got {stars} of {m['need_stars']} stars. Next week!"))
+                continue
+            bal = conn.execute("SELECT SUM(cents) FROM money_log WHERE person_id = ?", (k["id"],)).fetchone()[0]
+            out.append((k["id"], f"💰 Allowance: {_dollars(m['weekly'])}", f"You have {_dollars(bal)} saved."))
+    return out
+
+
+@app.get("/api/me/money")
+def me_money():
+    with db.db() as conn:
+        return [{"kid": k, **_money(conn, k["id"])} for k in
+                db.rows(conn.execute("SELECT id, name, color, icon FROM people WHERE is_kid = 1 ORDER BY sort, id"))]
+
+
+class MoneySettingsIn(BaseModel):
+    weekly: float = 0        # dollars
+    payday: int = 5
+    need_stars: int = 0
+    star_cents: int = 0
+
+
+@app.put("/api/me/money/{pid}/settings")
+def me_money_settings(pid: int, body: MoneySettingsIn):
+    if not (0 <= body.weekly <= 200 and 0 <= body.payday <= 6 and 0 <= body.need_stars <= 500 and 0 <= body.star_cents <= 500):
+        raise HTTPException(400, "those numbers are out of range")
+    with db.db() as conn:
+        _kid(conn, pid)
+        value = {"weekly": round(body.weekly * 100), "payday": body.payday, "need_stars": body.need_stars, "star_cents": body.star_cents}
+        conn.execute("INSERT INTO settings (key, value) VALUES (?, ?) ON CONFLICT(key) DO UPDATE SET value = excluded.value",
+                     (f"money_{pid}", json.dumps(value)))
+    return value
+
+
+class MoneyIn(BaseModel):
+    amount: float            # dollars: positive adds; "spent" is taken off
+    kind: str = "other"
+    note: str = ""
+    by_person: int | None = None
+
+
+@app.post("/api/me/money/{pid}")
+def me_money_add(pid: int, body: MoneyIn):
+    if body.kind not in ("gift", "spent", "other", "allowance") or not body.amount or abs(body.amount) > 1000:
+        raise HTTPException(400, "put in an amount up to $1,000")
+    cents = round(body.amount * 100)
+    if body.kind == "spent":
+        cents = -abs(cents)
+    with db.db() as conn:
+        _kid(conn, pid)
+        _money_add(conn, pid, cents, body.kind, body.note.strip()[:80], body.by_person)
+        return _money(conn, pid)
+
+
+class CashInIn(BaseModel):
+    stars: int
+    by_person: int | None = None
+
+
+@app.post("/api/me/money/{pid}/cash-in")
+def me_cash_in(pid: int, body: CashInIn):
+    """Turn saved stars into money: they come off like a reward (reward_log), and the money goes in."""
+    with db.db() as conn:
+        kid = _kid(conn, pid)
+        m = _money_settings(conn, pid)
+        if not m["star_cents"]:
+            raise HTTPException(400, "set what a star is worth first (⚙️ Allowance)")
+        have = _star_balance(conn, pid)
+        if not 1 <= body.stars <= have:
+            raise HTTPException(400, f"{kid['name']} has {have} stars saved")
+        cents = body.stars * m["star_cents"]
+        conn.execute("INSERT INTO reward_log (person_id, title, cost, at) VALUES (?, ?, ?, ?)",
+                     (pid, f"💰 Cashed in for {_dollars(cents)}", body.stars, datetime.now(TZ).replace(tzinfo=None).isoformat(timespec="minutes")))
+        _money_add(conn, pid, cents, "stars", f"{body.stars} stars cashed in", body.by_person, stars=body.stars)
+        return _money(conn, pid)
+
+
+@app.delete("/api/me/money/entry/{eid}")
+def me_money_undo(eid: int):
+    with db.db() as conn:
+        row = conn.execute("SELECT * FROM money_log WHERE id = ?", (eid,)).fetchone()
+        if not row:
+            raise HTTPException(404, "no such entry")
+        if row["stars"]:  # give the stars back
+            conn.execute("DELETE FROM reward_log WHERE id = (SELECT id FROM reward_log WHERE person_id = ? AND cost = ? "
+                         "AND title LIKE '💰 Cashed in%' ORDER BY id DESC LIMIT 1)", (row["person_id"], row["stars"]))
+        conn.execute("DELETE FROM money_log WHERE id = ?", (eid,))
+        return _money(conn, row["person_id"])
 
 
 # ---------------------------------------------------------------- notifications on the adults' phones
@@ -2438,6 +2640,9 @@ def _evening_message(t: date) -> tuple[str, str, str] | None:
                 elif choice == "pack":
                     bits.append("🥪 packed lunch")
                 lines.append(f"{k['name']}: " + " · ".join(bits))
+        fw = _day_weather(weather(conn), t)
+        if fw:
+            lines.append(f"{weatherish(fw['code'])} {fw['hi']}° / {fw['lo']}°" + (": " + " · ".join(fw["hints"]) if fw.get("hints") else ""))
         school_events = _school_events(conn, t, t + timedelta(days=1)).get(t.isoformat(), [])
         lines += [f"📅 {e}" for e in school_events]
         for it in agenda(conn, t, t + timedelta(days=1)):
@@ -2462,6 +2667,11 @@ def _evening_message(t: date) -> tuple[str, str, str] | None:
                 lines.append(f"🍽️ School lunch ordering opens tomorrow (until {closes:%b} {closes.day})")
             if closes == t:
                 lines.append("🍽️ Tomorrow is the last day to order school lunch")
+        lines += house.reminders(conn, t)
+        for k in kids:
+            m = _money_settings(conn, k["id"])
+            if m["weekly"] and t.weekday() == m["payday"]:
+                lines.append(f"💰 {k['name']}'s allowance ({_dollars(m['weekly'])}) is added tomorrow")
         tonight = t - timedelta(days=1)
         school_tomorrow = school.closed_reason(t, _school_closures(conn)) is None
         for k in kids:
@@ -2597,6 +2807,13 @@ def _maintenance_loop() -> None:
                 logging.getLogger("planner.backup").info("nightly backup: %s", make_backup())
         except Exception:
             logging.getLogger("planner.backup").exception("backup failed")
+        try:
+            for pid, title, body in pay_allowances(datetime.now(TZ)):
+                with db.db() as conn:
+                    name = conn.execute("SELECT name FROM people WHERE id = ?", (pid,)).fetchone()["name"]
+                push.send(pid, title, body, f"/kids/{name.lower()}")
+        except Exception:
+            logging.getLogger("planner.money").exception("allowance failed")
         time.sleep(300)
 
 
@@ -2637,6 +2854,7 @@ def admin_overview():
             "SELECT p.name, COUNT(*) AS waiting FROM teacher_mail m JOIN people p ON p.id = m.person_id "
             "WHERE m.applied = '' GROUP BY p.name"))
         overdue = conn.execute("SELECT COUNT(*) FROM tasks WHERE done = 0 AND due_date < ?", (t.isoformat(),)).fetchone()[0]
+        upkeep = [j for j in house.jobs(conn, t) if j["state"] in ("overdue", "soon")]
         payments = [r for r in db.rows(conn.execute(
             "SELECT t.title, t.notes, t.due_date, p.name FROM tasks t LEFT JOIN people p ON p.id = t.person_id "
             "WHERE t.done = 0 ORDER BY t.due_date IS NULL, t.due_date")) if school_mail.is_payment(f"{r['title']} {r['notes']}")]
@@ -2655,7 +2873,7 @@ def admin_overview():
         "google": gstatus, "calendars": cals,
         "lunch": {**lunch, "next_window": [windows[0][0].isoformat(), windows[0][1].isoformat()] if windows else None},
         "mail_waiting": mail,
-        "overdue": overdue, "payments": payments,
+        "overdue": overdue, "payments": payments, "upkeep": upkeep,
         "pushes": pushes,
         "homelab": {**homelab_on, "last_scan": homelab._read("devices.json", {}).get("last_scan"),
                     "online": len(homelab._read("devices.json", {}).get("online_now", [])),
@@ -2667,6 +2885,12 @@ def admin_overview():
 def report_page():
     """A printable doctor report of one person's medicine, puffers and symptoms (adults and phone-only sign-ins)."""
     return _page("report.html")
+
+
+@app.get("/house")
+def house_page():
+    """Car and house upkeep, contacts and the sitter sheet (adults and phone-only sign-ins)."""
+    return _page("house.html")
 
 
 @app.get("/meals")

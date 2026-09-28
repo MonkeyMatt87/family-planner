@@ -50,6 +50,15 @@ def main() -> None:
                 conn.execute("INSERT INTO meds (person_id, name, kind, dose, times, min_hours, max_per_day, catalog_id) "
                              "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
                              (ids[who], name, kind, dose, "[]" if every else '["08:00"]', every, most, cid))
+        conn.execute("INSERT INTO settings (key, value) VALUES (?, ?)",
+                     (f"money_{ids['Maya']}", json.dumps({"weekly": 500, "payday": 5, "need_stars": 15, "star_cents": 25})))
+        conn.execute("INSERT INTO money_log (person_id, cents, kind, note, at) VALUES (?, 1000, 'gift', 'Birthday money from Nan', ?)",
+                     (ids["Maya"], f"{date.today() - timedelta(days=3)}T10:00"))
+        conn.executemany("INSERT INTO contacts (name, role, grp, phone, sitter) VALUES (?, ?, ?, ?, ?)", [
+            ("Alex", "Dad (cell)", "family", "902-555-0141", 1), ("Sam", "Mom (cell)", "family", "902-555-0172", 1),
+            ("Dr. Singh", "Family doctor", "health", "902-555-0199", 1), ("Jordan", "Babysitter", "sitters", "902-555-0123", 0)])
+        conn.executemany("INSERT INTO settings (key, value) VALUES (?, ?)", [
+            ("sitter_address", "12 Harbour View Rd"), ("sitter_notes", "Wi-Fi: RiveraHome\nFirst-aid kit: hall closet\nNo screens after 7")])
         for name, cat in [("Milk", "🥛 Dairy & eggs"), ("Bananas", "🥦 Produce"), ("Bread", "🍞 Bakery"), ("Chicken thighs", "🥩 Meat & fish")]:
             conn.execute("INSERT INTO grocery (name, category) VALUES (?, ?)", (name, cat))
         meals.seed(conn)

@@ -1,0 +1,59 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>House</title>
+  <meta name="theme-color" content="#f6f5f2" media="(prefers-color-scheme: light)">
+  <meta name="theme-color" content="#16181c" media="(prefers-color-scheme: dark)">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-title" content="House">
+  <link rel="apple-touch-icon" href="/icon-180.png">
+  <link rel="icon" href="/icon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="/style.css">
+  <link rel="stylesheet" href="/house.css">
+</head>
+<body>
+  <header class="top">
+    <div>
+      <h1 id="page-title">Upkeep</h1>
+      <div class="sub" id="page-sub"><a href="/" id="back-link">← Planner</a></div>
+    </div>
+    <button class="icon-btn" id="refresh-btn" aria-label="Refresh">
+      <svg viewBox="0 0 24 24"><path d="M20 12a8 8 0 1 1-2.34-5.66M20 4v5h-5"/></svg>
+    </button>
+  </header>
+
+  <main>
+    <section id="view-upkeep" class="view"></section>
+    <section id="view-contacts" class="view" hidden></section>
+    <section id="view-sitter" class="view" hidden></section>
+  </main>
+
+  <nav class="tabs">
+    <button data-view="upkeep" class="active">
+      <svg viewBox="0 0 24 24"><path d="M14.5 5.5a4 4 0 0 0-5.3 5.3L4 16v4h4l5.2-5.2a4 4 0 0 0 5.3-5.3l-2.6 2.6-2.5-.5-.5-2.5z"/></svg>
+      <span>Upkeep</span>
+    </button>
+    <button data-view="contacts">
+      <svg viewBox="0 0 24 24"><path d="M6.5 4h3l1.5 4-2 1.3a10 10 0 0 0 5.7 5.7l1.3-2 4 1.5v3a2 2 0 0 1-2 2A15 15 0 0 1 4.5 6a2 2 0 0 1 2-2z"/></svg>
+      <span>Contacts</span>
+    </button>
+    <button data-view="sitter">
+      <svg viewBox="0 0 24 24"><rect x="5" y="3.5" width="14" height="17" rx="2"/><path d="M9 3.5V6h6V3.5M8.5 10.5h7M8.5 14h7M8.5 17.5h4"/></svg>
+      <span>Sitter sheet</span>
+    </button>
+  </nav>
+
+  <div class="sheet-backdrop" id="sheet-backdrop" hidden></div>
+  <div class="sheet" id="sheet" hidden role="dialog" aria-modal="true">
+    <div class="sheet-handle"></div>
+    <div id="sheet-body"></div>
+  </div>
+  <div class="toast" id="toast" hidden></div>
+
+  <script src="/common.js"></script>
+  <script src="/house.js"></script>
+</body>
+</html>

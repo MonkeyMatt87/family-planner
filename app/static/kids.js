@@ -66,6 +66,7 @@ function render() {
     lines.push(`😎 It's the weekend!`);
   }
   if (s.event) lines.push(esc(s.event));
+  if (s.weather) for (const h of s.weather.hints) lines.push(esc(h));  // what to wear, from the forecast
   $("#summary").innerHTML = `<h2>☀️ ${when}</h2>${lines.map(l => `<div class="line">${l}</div>`).join("")}`;
 
   // weather
@@ -121,6 +122,21 @@ function render() {
           <div class="reward-top"><span class="t">${esc(r.title)}</span><span class="due">${left <= 0 ? "🎉 You can get it! Ask a grown-up" : `${left} more ${left === 1 ? th.one : th.many}`}</span></div>
           <div class="reward-track"><i style="width:${Math.min(100, data.balance / r.cost * 100).toFixed(0)}%"></i></div></div>`;
       }).join("")}`;
+  }
+
+  // money: the balance, when the allowance comes, and what a saved star is worth
+  const m = data.money;
+  $("#money").hidden = !m;
+  if (m) {
+    const dollars = c => `${c < 0 ? "-" : ""}$${(Math.abs(c) / 100).toFixed(2)}`;
+    const rel = m.next_payday ? relDay(m.next_payday, data.today) : "";
+    const pay = rel === "Today" || rel === "Tomorrow" ? rel.toLowerCase() : `on ${rel}`;
+    const st = m.settings;
+    $("#money").innerHTML = `
+      <div class="chore-head"><h2>💰 My money</h2><span class="stars big-money">${dollars(m.balance)}</span></div>
+      ${st.weekly ? `<div class="line">📅 Allowance: ${dollars(st.weekly)} ${esc(pay)}${st.need_stars ? ` if you get ${st.need_stars} ${th.many} this week (you have ${m.week_stars})` : ""}</div>` : ""}
+      ${st.star_cents ? `<div class="line">${th.star} Each ${th.one} you've saved is worth ${dollars(st.star_cents)}. Ask a grown-up to cash some in!</div>` : ""}
+      ${m.log.slice(0, 3).map(l => `<div class="line small">${l.cents > 0 ? "➕" : l.cents < 0 ? "➖" : "•"} ${esc(l.note || l.kind)}${l.cents ? ` · ${dollars(l.cents)}` : ""}</div>`).join("")}`;
   }
 
   // countdowns: next day off, birthdays, parties

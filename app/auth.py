@@ -74,8 +74,8 @@ MEMBER_PATHS = {"/mobile", "/my-shifts", "/api/dashboard", "/api/me", "/logout",
 
 
 def member_allowed(path: str) -> bool:
-    return (path in MEMBER_PATHS or path.startswith(("/api/my/", "/api/alerts/", "/api/meals/", "/api/meds"))
-            or path in ("/sw.js", "/meals", "/report") or is_public(path)
+    return (path in MEMBER_PATHS or path.startswith(("/api/my/", "/api/alerts/", "/api/meals/", "/api/meds", "/api/house/"))
+            or path in ("/sw.js", "/meals", "/report", "/house") or is_public(path)
             or path.endswith((".js", ".css", ".png", ".svg", ".json")))
 
 

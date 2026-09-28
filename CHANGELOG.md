@@ -1,5 +1,15 @@
 # Changelog
 
+## v1.2.0 (2026-09-28)
+
+- What to wear from the forecast (coat, snow gear, raincoat, wind, sun) on the kids' pages, in their 7 am
+  notification, on My page and in the 8 pm check
+- Kids' money: a weekly allowance (optionally only if they earned enough stars), cashing in stars, gifts and
+  spending, with the balance on their page
+- House page (`/house`): car and house upkeep with reminders (oil change, tires, filters, alarms, gutters…),
+  contacts with tap-to-call, and a printable sitter sheet (numbers, bedtimes, medicine, notes)
+- Emergency numbers for your country are added to Contacts (911, 999, 112, 000…)
+
 ## v1.1.0 (2026-09-28)
 
 - Bedtime routine (school nights and weekends) and homework & reading checklists, with phone reminders

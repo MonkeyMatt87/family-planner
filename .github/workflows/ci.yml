@@ -30,7 +30,7 @@ jobs:
           python -m app.demo
           uvicorn app.main:app --port 8080 & sleep 5
           curl -fsS -c /tmp/c -d "password=2468&next=/" localhost:8080/login -o /dev/null
-          for p in / /api/dashboard /api/tasks /me /admin /meals /display /kids /api/admin/overview /api/meds /api/meals/recipes /api/me/rewards; do
+          for p in / /api/dashboard /api/tasks /me /admin /meals /display /kids /api/admin/overview /api/meds /api/meals/recipes /api/me/rewards /house /api/house/upkeep /api/house/sitter /api/me/money; do
             curl -fsS -b /tmp/c "localhost:8080$p" -o /dev/null || { echo "failed: $p"; exit 1; }
           done
 

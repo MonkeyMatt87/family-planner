@@ -725,6 +725,8 @@ async function renderAdminExtras() {
         : statusRow(ok(true, "No school payments waiting"), "School payments and forms")}
       ${o.mail_waiting.length ? o.mail_waiting.map(m => statusRow(`📧 ${m.waiting} teacher email${m.waiting === 1 ? "" : "s"} to review for ${esc(m.name)}`, `<a href="/me">My page → Kids</a>`)).join("")
         : statusRow(ok(true, "Teacher emails all reviewed"), "")}
+      ${o.upkeep.map(j => statusRow(`${esc(j.title)}${j.what ? ` (${esc(j.what)})` : ""}`,
+        `${j.days < 0 ? `<span class="danger">${-j.days} day${j.days === -1 ? "" : "s"} overdue</span>` : j.days === 0 ? "Due today" : `Due ${esc(relDay(j.due, state.today))}`} · <a href="/house">House → Upkeep</a>`)).join("")}
       ${missed.map(({ m, s }) => statusRow(`💊 ${esc(m.person)}: ${esc(m.name)} at ${fmtTime(s.time)} not marked yet`, `Mark it on ${m.is_kid ? "My page → Kids" : "their page → Meds"}`)).join("")}
       ${ow || o.lunch.synced ? statusRow(`🍽️ School lunch ordering`, ow ? `${ow[0] <= state.today ? "Open now" : `Opens ${esc(relDay(ow[0], state.today))}`} · until ${esc(relDay(ow[1], state.today))}` : "No ordering dates known yet") : ""}
     </div>

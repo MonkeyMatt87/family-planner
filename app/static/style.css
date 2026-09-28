@@ -344,6 +344,7 @@ a.btn { text-decoration: none; display: inline-block; }
 .tabs.colored button[data-view="kids"]     { --tab: #d6478f; }
 .tabs.colored button[data-view="meds"]     { --tab: #d23f3f; }
 .tabs.colored button[data-go="/meals"]     { --tab: #2e9e5b; }
+.tabs.colored button[data-go="/house"]     { --tab: #a0672b; }
 .tabs.colored button[data-view="lab"]      { --tab: #7c4dd6; }
 .tabs.colored button[data-go="/admin"]     { --tab: #55657a; }
 .tabs.colored button[data-view="shifts"]   { --tab: #0e8f8f; }
@@ -354,6 +355,7 @@ a.btn { text-decoration: none; display: inline-block; }
   .tabs.colored button[data-view="kids"]     { --tab: #ef7ab5; }
   .tabs.colored button[data-view="meds"]     { --tab: #f06a6a; }
   .tabs.colored button[data-go="/meals"]     { --tab: #4cc07c; }
+  .tabs.colored button[data-go="/house"]     { --tab: #d69a5c; }
   .tabs.colored button[data-view="lab"]      { --tab: #a584ee; }
   .tabs.colored button[data-go="/admin"]     { --tab: #9aa8ba; }
   .tabs.colored button[data-view="shifts"]   { --tab: #3cc4c4; }

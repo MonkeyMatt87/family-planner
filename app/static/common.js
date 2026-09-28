@@ -149,9 +149,9 @@ function appointmentSheet({ appt = null, people, day, base, onSaved, person = nu
 // ------------------------------------------------------------ what each person's own page shows
 // Admin → People → a person → "Their page shows". Full access: My page (/me). Phone-only: their page (/my-shifts).
 const MY_PAGE_TABS = [["home", "🏠 Home (family board)"], ["calendar", "📅 Calendar"], ["kids", "🧒 Kids"], ["meds", "💊 Medicine"],
-  ["meals", "🍽️ Meals & groceries"], ["lab", "🖥️ Homelab"], ["admin", "🛠️ Admin"]];
+  ["meals", "🍽️ Meals & groceries"], ["house", "🏠 House (upkeep, contacts)"], ["lab", "🖥️ Homelab"], ["admin", "🛠️ Admin"]];
 const PHONE_PAGE_TABS = [["home", "🏠 Home (family board)"], ["shifts", "💼 Their shifts"], ["appts", "📅 Appointments"],
-  ["meds", "💊 Medicine"], ["meals", "🍽️ Meals & groceries"]];
+  ["meds", "💊 Medicine"], ["meals", "🍽️ Meals & groceries"], ["house", "🏠 House (upkeep, contacts)"]];
 
 function pageTabsFor(person, all) {
   let chosen = [];

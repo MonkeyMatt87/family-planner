@@ -245,10 +245,11 @@ async function editAppt(id, date) {
 async function renderKids() {
   const v = $("#view-kids");
   state.kids = await api("/api/me/kids");
-  const [mail, rw, medsData, sick] = await Promise.all([Promise.all(state.kids.map(k => api(`/api/me/mail?kid=${k.kid.id}`))),
-    api("/api/me/rewards"), api("/api/meds"), api("/api/meds/symptoms?days=3")]);
+  const [mail, rw, medsData, sick, money] = await Promise.all([Promise.all(state.kids.map(k => api(`/api/me/mail?kid=${k.kid.id}`))),
+    api("/api/me/rewards"), api("/api/meds"), api("/api/meds/symptoms?days=3"), api("/api/me/money")]);
   state.rewards = rw;
   state.meds = medsData;
+  state.money = Object.fromEntries(money.map(m => [m.kid.id, m]));
   v.innerHTML = state.kids.map((k, ki) => {
     const s = k.summary;
     const school = s.school
@@ -265,6 +266,7 @@ async function renderKids() {
         <button class="btn secondary small" data-kid-appt="${k.kid.id}">+ Appointment</button></div>
       <div class="kid-sec"><div class="sec-h">School ${esc(s.when)}</div>
         <div class="kid-line">${school}</div>${lunch ? `<div class="kid-line">${lunch}</div>` : ""}
+        ${s.weather ? `<div class="kid-line">${weatherInfo(s.weather.code).icon} ${s.weather.hi}° / ${s.weather.lo}°${s.weather.hints.length ? ` · ${s.weather.hints.map(esc).join(" · ")}` : ""}</div>` : ""}
         ${p.teacher ? `<div class="kid-line">👩‍🏫 ${esc(p.teacher)}${p.teacher_email ? ` · <a href="mailto:${esc(p.teacher_email)}">${esc(p.teacher_email)}</a>` : ""}</div>` : ""}
         ${p.class_notes ? `<div class="kid-line muted small">${esc(p.class_notes).replace(/\n/g, "<br>")}</div>` : ""}</div>
       <div class="kid-sec kid-meds"><div class="sec-h">💊 Medicine &amp; sick</div>
@@ -284,6 +286,7 @@ async function renderKids() {
           ${k.rewards.length ? `<button class="btn secondary small" data-edit-rewards>Change rewards</button>` : ""}</div>
         ${(state.rewards.given || []).filter(g => g.person_id === k.kid.id).slice(0, 3).map(g =>
           `<div class="kid-line muted small">🎉 ${esc(g.title)} · ${esc(relDay(g.at.slice(0, 10), today))}</div>`).join("")}</div>
+      ${moneyHTML(state.money[k.kid.id])}
       ${k.bedtime.length ? `<div class="kid-sec"><div class="sec-h">🌙 Bedtime tonight · ${bedDone} of ${k.bedtime.length} done</div>
         ${k.bedtime.map(c => `<div class="kid-line">${c.done ? "✅" : "☐"} ${c.at ? `<b>${fmtTime(c.at)}</b> · ` : ""}${esc(c.title)}</div>`).join("")}</div>` : ""}
       <div class="kid-sec"><div class="sec-h">Next 7 days</div>
@@ -328,6 +331,121 @@ async function renderMeds() {
       <span class="rnum">${esc(medDay(l.at))}${l.by_name ? ` · ${esc(l.by_name)}` : ""}</span></div>`).join("")
       || `<div class="rank muted">Nothing given in the last week.</div>`}</div>
     <p class="hint center"><a href="/admin">Admin → Medicine</a> has the full history and every setting.</p>`;
+}
+
+// ------------------------------------------------------------ money: allowance, stars cashed in, spending
+
+const WEEKDAYS = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+const dollars = c => `${c < 0 ? "-" : ""}$${(Math.abs(c) / 100).toFixed(2)}`;
+
+function moneyHTML(m) {
+  if (!m) return "";
+  const st = m.settings, id = m.kid.id;
+  const plan = [st.weekly ? `${dollars(st.weekly)} every ${WEEKDAYS[st.payday]}${st.need_stars ? ` if they get ${st.need_stars} stars (${m.week_stars} so far)` : ""}` : "No weekly allowance",
+    st.star_cents ? `a star is ${dollars(st.star_cents)}` : ""].filter(Boolean).join(" · ");
+  return `<div class="kid-sec"><div class="sec-h">💰 Money · ${dollars(m.balance)}</div>
+    <div class="kid-line muted small">${esc(plan)}</div>
+    ${m.log.slice(0, 3).map(l => `<div class="kid-line small">${l.cents > 0 ? "➕" : l.cents < 0 ? "➖" : "•"} ${esc(l.note || l.kind)}${l.cents ? ` · <b>${dollars(l.cents)}</b>` : ""} <span class="muted">· ${esc(relDay(l.at.slice(0, 10), today))}</span></div>`).join("")}
+    <div class="mail-actions">
+      <button class="btn secondary small" data-money="${id}" data-kind="gift">+ Add</button>
+      <button class="btn secondary small" data-money="${id}" data-kind="spent">− Spent</button>
+      ${st.star_cents ? `<button class="btn secondary small" data-cash-in="${id}" ${m.stars ? "" : "disabled"}>⭐ Cash in stars</button>` : ""}
+      <button class="btn secondary small" data-allowance="${id}">⚙️ Allowance</button>
+      ${m.log.length ? `<button class="btn secondary small" data-money-log="${id}">History</button>` : ""}
+    </div></div>`;
+}
+
+function moneyForm(kidId, kind) {
+  const kid = state.byId[kidId];
+  const spent = kind === "spent";
+  openSheet(`
+    <h2>${spent ? `➖ ${esc(kid.name)} spent` : `➕ Money for ${esc(kid.name)}`}</h2>
+    <form id="money-form">
+      <div class="two">
+        <label>Amount<input name="amount" type="number" min="0.01" max="1000" step="0.01" inputmode="decimal" required placeholder="$"></label>
+        ${spent ? "<span></span>" : `<label>What<select name="kind"><option value="gift">🎁 A gift</option><option value="allowance">📅 Allowance</option><option value="other">Other</option></select></label>`}
+      </div>
+      <label>Note<input name="note" maxlength="80" autocomplete="off" placeholder="${spent ? "Pokémon cards" : "Birthday money from Nan"}"></label>
+      <div class="sheet-actions"><button type="button" class="btn secondary" id="m-cancel">Cancel</button><button class="btn">Save</button></div>
+    </form>`, body => {
+    body.querySelector("#m-cancel").addEventListener("click", closeSheet);
+    body.querySelector("#money-form").addEventListener("submit", e => {
+      e.preventDefault();
+      const f = e.target;
+      run(async () => {
+        await api(`/api/me/money/${kidId}`, { method: "POST", body: { amount: Number(f.amount.value), kind: spent ? "spent" : f.kind.value,
+          note: f.note.value || (spent ? "Spent" : ""), by_person: state.owner?.id || null } });
+        closeSheet(); toast("Saved"); renderKids();
+      });
+    });
+  });
+}
+
+function cashInForm(kidId) {
+  const m = state.money[kidId], kid = state.byId[kidId], each = m.settings.star_cents;
+  openSheet(`
+    <h2>⭐ Cash in ${esc(kid.name)}'s stars</h2>
+    <form id="cash-form">
+      <label>Stars (${m.stars} saved)<input name="stars" type="number" min="1" max="${m.stars}" value="${m.stars}" required></label>
+      <p class="hint" id="cash-hint">= ${dollars(m.stars * each)} at ${dollars(each)} a star. They come off the stars saved for rewards.</p>
+      <div class="sheet-actions"><button type="button" class="btn secondary" id="c-cancel">Cancel</button><button class="btn">Cash in</button></div>
+    </form>`, body => {
+    body.querySelector("#c-cancel").addEventListener("click", closeSheet);
+    const f = body.querySelector("#cash-form");
+    f.stars.addEventListener("input", () => { body.querySelector("#cash-hint").textContent = `= ${dollars((Number(f.stars.value) || 0) * each)} at ${dollars(each)} a star. They come off the stars saved for rewards.`; });
+    f.addEventListener("submit", e => {
+      e.preventDefault();
+      run(async () => {
+        await api(`/api/me/money/${kidId}/cash-in`, { method: "POST", body: { stars: Number(f.stars.value), by_person: state.owner?.id || null } });
+        closeSheet(); toast("💰 Cashed in"); renderKids();
+      });
+    });
+  });
+}
+
+function allowanceForm(kidId) {
+  const st = state.money[kidId].settings, kid = state.byId[kidId];
+  openSheet(`
+    <h2>⚙️ ${esc(kid.name)}'s allowance</h2>
+    <form id="allow-form">
+      <div class="two">
+        <label>Every week<input name="weekly" type="number" min="0" max="200" step="0.25" inputmode="decimal" value="${(st.weekly / 100).toFixed(2)}"></label>
+        <label>On<select name="payday">${WEEKDAYS.map((d, i) => `<option value="${i}" ${st.payday === i ? "selected" : ""}>${d}</option>`).join("")}</select></label>
+      </div>
+      <label>Only if they get this many stars that week (0 = always)<input name="need" type="number" min="0" max="500" value="${st.need_stars}"></label>
+      <label>A saved star is worth (cents, 0 = can't cash in)<input name="star" type="number" min="0" max="500" value="${st.star_cents}"></label>
+      <p class="hint">The allowance goes in at 8 am on the day, and ${esc(kid.name)}'s phone gets a note if reminders are on. $0 turns it off.</p>
+      <div class="sheet-actions"><button type="button" class="btn secondary" id="a-cancel">Cancel</button><button class="btn">Save</button></div>
+    </form>`, body => {
+    body.querySelector("#a-cancel").addEventListener("click", closeSheet);
+    body.querySelector("#allow-form").addEventListener("submit", e => {
+      e.preventDefault();
+      const f = e.target;
+      run(async () => {
+        await api(`/api/me/money/${kidId}/settings`, { method: "PUT", body: { weekly: Number(f.weekly.value || 0), payday: Number(f.payday.value),
+          need_stars: Number(f.need.value || 0), star_cents: Number(f.star.value || 0) } });
+        closeSheet(); toast("Saved"); renderKids();
+      });
+    });
+  });
+}
+
+function moneyLog(kidId) {
+  const m = state.money[kidId];
+  openSheet(`
+    <h2>💰 ${esc(state.byId[kidId].name)} · ${dollars(m.balance)}</h2>
+    <div class="card list">${m.log.map(l => `<div class="row"><div class="row-main">
+      <div class="row-title">${esc(l.note || l.kind)}${l.cents ? ` · ${dollars(l.cents)}` : ""}</div>
+      <div class="row-meta">${esc(l.at.replace("T", " "))}${l.by_name ? ` · ${esc(l.by_name)}` : ""}</div></div>
+      <button class="icon-btn small" data-undo-money="${l.id}" aria-label="Undo"><svg viewBox="0 0 24 24"><path d="M6 6l12 12M18 6L6 18"/></svg></button></div>`).join("")}</div>
+    <p class="hint">✕ undoes an entry (cashed-in stars go back).</p>
+    <div class="sheet-actions"><button type="button" class="btn secondary" id="ml-close">Done</button></div>`, body => {
+    body.querySelector("#ml-close").addEventListener("click", () => { closeSheet(); renderKids(); });
+    body.querySelectorAll("[data-undo-money]").forEach(b => b.addEventListener("click", () => run(async () => {
+      await api(`/api/me/money/entry/${b.dataset.undoMoney}`, { method: "DELETE" });
+      b.closest(".row").remove();
+    })));
+  });
 }
 
 // ------------------------------------------------------------ rewards (the adults choose them)
@@ -782,6 +900,14 @@ document.addEventListener("click", e => {
     await api(`/api/me/rewards/${r.id}/give`, { method: "POST", body: { person_id: kid.id } });
     toast(`🎉 ${kid.name}: ${r.title}`); renderKids();
   });
+  const moneyBtn = t.closest("[data-money]");
+  if (moneyBtn) return moneyForm(Number(moneyBtn.dataset.money), moneyBtn.dataset.kind);
+  const cashIn = t.closest("[data-cash-in]");
+  if (cashIn) return cashInForm(Number(cashIn.dataset.cashIn));
+  const allowance = t.closest("[data-allowance]");
+  if (allowance) return allowanceForm(Number(allowance.dataset.allowance));
+  const mLog = t.closest("[data-money-log]");
+  if (mLog) return moneyLog(Number(mLog.dataset.moneyLog));
   const addReward = t.closest("[data-add-reward]");
   if (addReward) return rewardForm(Number(addReward.dataset.addReward));
   if (t.closest("[data-edit-rewards]")) return rewardsList();
@@ -811,7 +937,7 @@ run(async () => {
   state.view = TITLES[recall("view")] ? recall("view") : "home";
   state.lab = ["pve", "dns", "speed", "net"].includes(recall("lab")) ? recall("lab") : "pve";
   // The tabs chosen in Admin → People for the adult this page belongs to (the first with full access).
-  const owner = state.people.find(p => !p.is_kid && p.access !== "phone");
+  const owner = state.owner = state.people.find(p => !p.is_kid && p.access !== "phone");
   const on = applyPageTabs(owner, MY_PAGE_TABS);
   if (!on.includes(state.view)) state.view = on.find(k => TITLES[k]) || "home";
   await render();

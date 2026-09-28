@@ -35,6 +35,12 @@ and a fun page for each kid. It runs on your own server: a Proxmox LXC, a mini P
   doctor report with a spreadsheet.
 - **Notifications for the adults**: an 8 pm "tomorrow" check (school day, gym, lunches, appointments,
   forms, low puffers, unticked homework), medicine given to a kid, and homelab alerts.
+- **What to wear**: the forecast becomes "🧥 Winter coat, hat and mittens", "☔ Raincoat" or "🧢 Sunscreen" on
+  the kids' pages, their morning notification and the 8 pm check.
+- **Kids' money**: a weekly allowance (optionally only if they got enough stars that week), stars cashed in,
+  gifts and spending, with the balance on their page.
+- **House page** (`/house`): car and house upkeep (oil changes, tire swaps, furnace filters, smoke alarms…)
+  with reminders, the family's contacts with tap-to-call, and a printable sheet for the babysitter.
 - **Admin page** (`/admin`): every setting in tabs, with an overview of what needs attention and whether
   everything is working. Choose which tabs each adult's page shows.
 - **Work shifts**: tap days on a month grid, or type a week the way a paper schedule looks
