@@ -73,6 +73,9 @@ It asks a few questions (the defaults are fine), creates a Debian LXC with Docke
 Options: `--ctid 120 --ip 192.168.1.50/24 --gw 192.168.1.1 --storage local-lvm --homelab -y`
 (run with `--help` for all of them).
 
+Tested on Proxmox VE 9.1: install, update (`pct exec <id> -- bash /root/install.sh`) and a reboot, with the
+family's data kept. It takes a few minutes, most of it building the planner.
+
 ### Any Debian or Ubuntu machine
 
 ```bash
