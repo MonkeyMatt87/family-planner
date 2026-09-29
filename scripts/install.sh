@@ -97,5 +97,10 @@ IP="$(hostname -I 2>/dev/null | awk '{print $1}')"
 PORT="$(grep -oP '^PLANNER_PORT=\K\d+' .env || echo 8080)"
 echo
 printf '\033[1;32mFamily Planner is running.\033[0m\n'
-echo "  Open http://${IP:-<this machine>}:${PORT}/setup from a computer or phone on your home network."
+# Once the family is set up, /api/setup needs a sign-in; it only answers "needed" on a new planner.
+if curl -fsS "http://127.0.0.1:${PORT}/api/setup" 2>/dev/null | grep -q '"needed":true'; then
+  echo "  Open http://${IP:-<this machine>}:${PORT}/setup from a computer or phone on your home network."
+else
+  echo "  Updated. Your family and data are kept: http://${IP:-<this machine>}:${PORT}"
+fi
 echo "  Files: $DIR  ·  Data: $DIR/data  ·  Update: run this installer again"
