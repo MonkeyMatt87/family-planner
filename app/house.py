@@ -45,6 +45,7 @@ def _next_on(month: int, day: int, t: date) -> str:
 
 def seed(conn) -> None:
     """Common jobs, once. The ones counted from the last time have no date until it's filled in."""
+    seed_emergency(conn)  # every start: it waits until the family's country is known, then runs once
     if conn.execute("SELECT 1 FROM settings WHERE key = 'upkeep_seeded'").fetchone():
         return
     t = today()
@@ -61,7 +62,6 @@ def seed(conn) -> None:
     conn.executemany("INSERT INTO upkeep (title, area, every_months, fixed, due, remind_days, notes, sort) "
                      "VALUES (?, ?, ?, ?, ?, ?, ?, ?)", [(*j, i) for i, j in enumerate(jobs)])
     conn.execute("INSERT INTO settings (key, value) VALUES ('upkeep_seeded', '1')")
-    seed_emergency(conn)
 
 
 # Emergency numbers by country (the holidays country from setup); anywhere else gets 112.

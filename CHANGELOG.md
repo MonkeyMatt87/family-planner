@@ -1,5 +1,12 @@
 # Changelog
 
+## v1.2.1 (2026-09-28)
+
+- Fixed: the emergency numbers weren't added to Contacts if the planner had started once before the
+  family's country was set (for example when loading the demo family)
+- The installer says your data was kept after an update, instead of pointing at the setup page
+- New screenshots, issue forms for bugs and ideas, and a security policy
+
 ## v1.2.0 (2026-09-28)
 
 - What to wear from the forecast (coat, snow gear, raincoat, wind, sun) on the kids' pages, in their 7 am

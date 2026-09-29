@@ -1,5 +1,9 @@
 # Family Planner
 
+[![CI](https://github.com/MonkeyMatt87/family-planner/actions/workflows/ci.yml/badge.svg)](https://github.com/MonkeyMatt87/family-planner/actions/workflows/ci.yml)
+[![Release](https://img.shields.io/github/v/release/MonkeyMatt87/family-planner)](https://github.com/MonkeyMatt87/family-planner/releases/latest)
+[![License: MIT](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+
 **A self-hosted family organizer for your homelab.** One small container gives your family a shared
 calendar, to-dos and school projects, school lunches, work shifts, bills, a wall screen for the kitchen,
 and a fun page for each kid. It runs on your own server: a Proxmox LXC, a mini PC or a Raspberry Pi.
@@ -8,10 +12,16 @@ and a fun page for each kid. It runs on your own server: a Proxmox LXC, a mini P
   <img src="docs/screenshots/wall-display.png" alt="The wall display" width="100%">
 </p>
 <p align="center">
+  <img src="docs/screenshots/kids-page.png" alt="A kid's page: tomorrow, what to wear, homework and bedtime" width="24%">
+  <img src="docs/screenshots/phone-my-page-kids.png" alt="My page: a card for each kid with medicine, rewards and money" width="24%">
+  <img src="docs/screenshots/phone-house-upkeep.png" alt="House: car and house upkeep" width="24%">
+  <img src="docs/screenshots/phone-sitter-sheet.png" alt="The printable sitter sheet" width="24%">
+</p>
+<p align="center">
   <img src="docs/screenshots/phone-home.png" alt="Phone app" width="24%">
   <img src="docs/screenshots/phone-board.png" alt="Family board on a phone" width="24%">
-  <img src="docs/screenshots/kids-page.png" alt="A kid's page" width="24%">
-  <img src="docs/screenshots/my-page-calendar.png" alt="My page: calendar" width="24%">
+  <img src="docs/screenshots/phone-suppers.png" alt="Meals: the week's suppers" width="24%">
+  <img src="docs/screenshots/phone-medicine.png" alt="Medicine, in dark mode" width="24%">
 </p>
 
 ## Features

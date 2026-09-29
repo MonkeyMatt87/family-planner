@@ -1,0 +1,44 @@
+name: 🐞 Something's broken
+description: A page doesn't load, something shows the wrong thing, the installer fails…
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: Thanks for reporting! Please leave out PINs, calendar links and anything personal.
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown at http://<planner>:8080/health
+      placeholder: "1.2.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How is it installed?
+      options:
+        - Proxmox one-line installer
+        - Debian/Ubuntu installer
+        - Docker Compose by hand
+        - Other
+    validations:
+      required: true
+  - type: input
+    id: device
+    attributes:
+      label: Device and browser
+      placeholder: "iPhone 15, Safari · Raspberry Pi 4 wall screen · Android, Chrome"
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs (optional)
+      description: "`docker logs family-planner --tail 50` inside the container"
+      render: text

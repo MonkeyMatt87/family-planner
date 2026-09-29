@@ -1,0 +1,16 @@
+name: 💡 An idea
+description: Something that would make the planner more useful for your family
+labels: ["idea"]
+body:
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would you like it to do?
+      description: Tell us about your family's routine and what's missing. The why helps more than the how.
+    validations:
+      required: true
+  - type: textarea
+    id: now
+    attributes:
+      label: How do you handle it today?
+      description: A paper list, another app, a group chat…
